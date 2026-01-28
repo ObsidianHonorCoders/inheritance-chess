@@ -5,6 +5,7 @@ add_definitions(-DUNICODE -D_UNICODE)
 
 project(inheritance_chess_project)
 
+include_directories("include")
 file(GLOB SOURCES "src/*.cpp")
 add_executable(ichess_runner)
 target_sources(ichess_runner PRIVATE ${SOURCES} main.cpp)
