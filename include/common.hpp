@@ -16,6 +16,17 @@ enum class PieceColor : char
   BLACK = 'b'
 };
 
+enum class PieceRepresentation : char
+{
+  NONE   = ' ',
+  PAWN   = 'P',
+  KNIGHT = 'N',
+  BISHOP = 'B',
+  ROOK   = 'R',
+  QUEEN  = 'Q',
+  KING   = 'K'
+};
+
 struct PiecePosition
 {
     char file; // e.g., 'a' through 'h'
