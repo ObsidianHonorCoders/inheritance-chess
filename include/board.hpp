@@ -22,10 +22,11 @@ class Board
     static constexpr int MAX_OUT_EACH_SIDE_BOARD = 15;
 
     Board();
-    void display() const;
-    void setPiece(int row, int col, Pieza* piece);
-    void addPieceOut(bool side, Pieza* piece);
     void clearBoard();
+    void initializeStandardSetup();
+    void display() const;
+    void addPieceOut(bool side, Pieza* piece);
+    void setPiece(int row, int col, Pieza* piece);
 
   private:
     std::array<std::array<Pieza*, BOARD_SIZE>, BOARD_SIZE> grid  = {};

@@ -8,6 +8,8 @@
 /// ---------------------------------------------------------------------------------
 #include "board.hpp"
 
+Board::Board() { clearBoard(); }
+
 void Board::clearBoard()
 {
   for (int i = 0; i < Board::MAX_OUT_EACH_SIDE_BOARD; i++)
@@ -36,7 +38,7 @@ void Board::clearBoard()
   }
 }
 
-Board::Board() { clearBoard(); }
+void Board::initializeStandardSetup() {}
 
 void Board::display() const
 {
@@ -65,19 +67,6 @@ void Board::display() const
   for (Pieza* p : b_out)
   {
     std::cout << getchar(p);
-  }
-}
-
-void Board::setPiece(int row, int col, Pieza* piece)
-{
-  if (0 <= row && row < BOARD_SIZE && 0 <= col && col < BOARD_SIZE)
-  {
-    if (grid[row][col])
-    {
-      delete grid[row][col];
-      grid[row][col] = nullptr;
-    }
-    grid[row][col] = piece;
   }
 }
 
@@ -113,5 +102,17 @@ void Board::addPieceOut(bool side, Pieza* piece)
     {
       throw std::runtime_error("Black out stack is full.");
     }
+  }
+}
+
+void Board::setPiece(int row, int col, Pieza* piece)
+{
+  if (0 <= row && row < BOARD_SIZE && 0 <= col && col < BOARD_SIZE)
+  {
+    if (grid[row][col])
+    {
+      addPieceOut(grid[row][col]->is_white(), grid[row][col]);
+    }
+    grid[row][col] = piece;
   }
 }
