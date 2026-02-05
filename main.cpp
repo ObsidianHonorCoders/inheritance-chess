@@ -12,8 +12,6 @@
 #include <memory>
 
 #include "board.hpp"
-#include "pawns.hpp"
-
 
 int main()
 {
@@ -21,12 +19,11 @@ int main()
   std::cout << "|  Inheritance Chess Engine v1.0   |" << std::endl;
   std::cout << "====================================" << std::endl;
   std::cout << "Starting Inheritance Chess!" << std::endl;
-  
+
   Pawn white_pawn('e', '2', PieceColor::WHITE);
   Pawn black_pawn('d', '7', PieceColor::BLACK);
 
   Board chessBoard;
-  chessBoard.initializeStandardSetup();
 
   std::cout << "Standard Chess Starting Position:" << std::endl;
   chessBoard.display();

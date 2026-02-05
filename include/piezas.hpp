@@ -8,7 +8,10 @@
 /// ---------------------------------------------------------------------------------
 #ifndef ICHESS_SRC_PIEZAS
 #define ICHESS_SRC_PIEZAS
+
 #include <vector>
+#include <stdexcept>
+
 #include "common.hpp"
 
 class Pieza
@@ -21,15 +24,17 @@ class Pieza
     Pieza(); // Private constructor to prevent color-less instantiation
 
   public:
-    Pieza(PieceColor col, PieceType rep);
+    Pieza(PieceColor col, PieceType typ);
 
-    bool is_black() const;
-    bool is_white() const;
-    void set_position(char f, char r);
-    char get_representation() const;
+    const bool is_black() const;
+    const bool is_white() const;
+    void       set_position(char f, char r);
+    const char get_representation() const;
 
     virtual ~Pieza()                                        = default;
     virtual void moves(std::vector<PiecePosition>& p) const = 0;
 };
+
+inline const char getchar(Pieza* p) { return (p ? p->get_representation() : ' '); }
 
 #endif // ICHESS_SRC_PIEZAS

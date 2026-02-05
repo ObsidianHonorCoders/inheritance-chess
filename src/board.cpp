@@ -10,48 +10,28 @@
 
 static void clearBoard(Board& B)
 {
+  for (int i = 0; i < Board::MAX_OUT_EACH_SIDE_BOARD; i++)
+  {
+    B.setPieceOut(i, true, NULL);
+    B.setPieceOut(i, false, NULL);
+  }
   for (int i = 0; i < Board::BOARD_SIZE; i++)
   {
     for (int j = 0; j < Board::BOARD_SIZE; j++)
     {
-      B.setPiece(i, j, Board::PieceCharID::EMPTY);
+      B.setPiece(i, j, NULL);
     }
   }
 }
 
 Board::Board() { clearBoard(*this); }
 
-void Board::initializeStandardSetup()
-{
-  clearBoard(*this);
-
-  for (int i = 0; i < BOARD_SIZE; ++i)
-  {
-    grid[1][i] = PieceCharID::PAWN_BLACK;
-    grid[6][i] = PieceCharID::PAWN_WHITE;
-  }
-
-  grid[0][0] = PieceCharID::ROOK_BLACK;
-  grid[0][1] = PieceCharID::KNIGHT_BLACK;
-  grid[0][2] = PieceCharID::BISHOP_BLACK;
-  grid[0][3] = PieceCharID::QUEEN_BLACK;
-  grid[0][4] = PieceCharID::KING_BLACK;
-  grid[0][5] = PieceCharID::BISHOP_BLACK;
-  grid[0][6] = PieceCharID::KNIGHT_BLACK;
-  grid[0][7] = PieceCharID::ROOK_BLACK;
-
-  grid[7][0] = PieceCharID::ROOK_WHITE;
-  grid[7][1] = PieceCharID::KNIGHT_WHITE;
-  grid[7][2] = PieceCharID::BISHOP_WHITE;
-  grid[7][3] = PieceCharID::QUEEN_WHITE;
-  grid[7][4] = PieceCharID::KING_WHITE;
-  grid[7][5] = PieceCharID::BISHOP_WHITE;
-  grid[7][6] = PieceCharID::KNIGHT_WHITE;
-  grid[7][7] = PieceCharID::ROOK_WHITE;
-}
-
 void Board::display() const
 {
+  for (Pieza* p : w_out)
+  {
+    std::cout << getchar(p);
+  }
   for (int row = 0; row < BOARD_SIZE; row++)
   {
     std::cout << std::endl << "  +---+---+---+---+---+---+---+---+" << std::endl;
@@ -60,32 +40,66 @@ void Board::display() const
     {
       if ((row + col) % 2 == 0)
       {
-        std::cout << " " << static_cast<char>(grid[row][col]) << " |";
+        std::cout << " " << getchar(grid[row][col]) << " |";
       }
       else
       {
-        std::cout << "-" << static_cast<char>(grid[row][col]) << "-|";
+        std::cout << "-" << getchar(grid[row][col]) << "-|";
       }
     }
   }
   std::cout << std::endl << "  +---+---+---+---+---+---+---+---+" << std::endl;
   std::cout << "    a   b   c   d   e   f   g   h" << std::endl << std::endl;
+  for (Pieza* p : b_out)
+  {
+    std::cout << getchar(p);
+  }
 }
 
-void Board::setPiece(int row, int col, PieceCharID piece)
+void Board::setPiece(int row, int col, Pieza* piece)
 {
   if (0 <= row && row < BOARD_SIZE && 0 <= col && col < BOARD_SIZE)
   {
+    if (grid[row][col])
+    {
+      delete grid[row][col];
+      grid[row][col] = NULL;
+    }
     grid[row][col] = piece;
   }
 }
 
-Board::PieceCharID Board::getPiece(int row, int col) const
+void Board::addPieceOut(bool side, Pieza* piece)
 {
-  PieceCharID result = PieceCharID::EMPTY;
-  if (0 <= row && row < BOARD_SIZE && 0 <= col && col < BOARD_SIZE)
+  int idx = 0;
+  if (side)
   {
-    result = grid[row][col];
+    while (idx < Board::MAX_OUT_EACH_SIDE_BOARD && w_out[idx])
+    {
+      idx++;
+    }
+    if (idx < Board::MAX_OUT_EACH_SIDE_BOARD)
+    {
+      w_out[idx] = piece;
+    }
+    else
+    {
+      throw std::runtime_error("White out stack is full.");
+    }
   }
-  return result;
+  else
+  {
+    while (idx < Board::MAX_OUT_EACH_SIDE_BOARD && b_out[idx])
+    {
+      idx++;
+    }
+    if (idx < Board::MAX_OUT_EACH_SIDE_BOARD)
+    {
+      b_out[idx] = piece;
+    }
+    else
+    {
+      throw std::runtime_error("Black out stack is full.");
+    }
+  }
 }

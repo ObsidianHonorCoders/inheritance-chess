@@ -12,10 +12,10 @@
 
 Pieza::Pieza() {}
 
-Pieza::Pieza(PieceColor col, PieceType rep) : color(col), type(rep) { set_position(' ', ' '); }
+Pieza::Pieza(PieceColor col, PieceType typ) : color(col), type(typ) { set_position(' ', ' '); }
 
-bool Pieza::is_black() const { return color == PieceColor::BLACK; }
-bool Pieza::is_white() const { return color == PieceColor::WHITE; }
+const bool Pieza::is_black() const { return color == PieceColor::BLACK; }
+const bool Pieza::is_white() const { return color == PieceColor::WHITE; }
 
 void Pieza::set_position(char f, char r)
 {
@@ -37,7 +37,7 @@ void Pieza::set_position(char f, char r)
   }
 }
 
-char Pieza::get_representation() const
+const char Pieza::get_representation() const
 {
   char res = ' ';
   if (color == PieceColor::WHITE)
