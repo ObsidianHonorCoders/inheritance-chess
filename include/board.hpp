@@ -22,15 +22,17 @@ class Board
     static constexpr int MAX_OUT_EACH_SIDE_BOARD = 15;
 
     Board();
-    void clearBoard();
+    ~Board();
+    void clearGrid();
+    void updateGrid();
+    void cleanPieces();
+    void addPiece(Pieza* piece);
     void initializeStandardSetup();
     void display() const;
-    void addPieceOut(bool side, Pieza* piece);
-    void setPiece(int row, int col, Pieza* piece);
 
   private:
-    std::array<std::array<Pieza*, BOARD_SIZE>, BOARD_SIZE> grid  = {};
-    std::array<Pieza*, MAX_OUT_EACH_SIDE_BOARD>            w_out = {}, b_out = {};
+    std::vector<Pieza*>                                  pieces = {};
+    std::array<std::array<char, BOARD_SIZE>, BOARD_SIZE> grid   = {};
 };
 
 #endif // ICHESS_SRC_BOARD

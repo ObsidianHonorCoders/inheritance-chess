@@ -8,52 +8,61 @@
 /// ---------------------------------------------------------------------------------
 #include "board.hpp"
 
-Board::Board() { clearBoard(); }
+Board::Board() { clearGrid(); }
+Board::~Board() { cleanPieces(); }
 
-void Board::clearBoard()
+void Board::clearGrid()
 {
-  for (int i = 0; i < Board::MAX_OUT_EACH_SIDE_BOARD; i++)
-  {
-    if (w_out[i])
-    {
-      delete w_out[i];
-      w_out[i] = nullptr;
-    }
-    if (b_out[i])
-    {
-      delete b_out[i];
-      b_out[i] = nullptr;
-    }
-  }
   for (int i = 0; i < Board::BOARD_SIZE; i++)
   {
     for (int j = 0; j < Board::BOARD_SIZE; j++)
     {
-      if (grid[i][j])
-      {
-        delete grid[i][j];
-        grid[i][j] = nullptr;
-      }
+      grid[i][j] = ' ';
     }
   }
 }
 
+void Board::updateGrid()
+{
+  char f = ' ', r = ' ';
+  for (Pieza* p : pieces)
+  {
+    if (p)
+    {
+      p->get_position(f, r);
+      grid[f - 'a']['8' - r] = p->get_representation();
+    }
+  }
+}
+
+void Board::cleanPieces()
+{
+  for (size_t i = pieces.size(); i > 0; i--)
+  {
+    if (pieces[i - 1])
+    {
+      delete pieces[i - 1];
+      pieces[i - 1] = NULL;
+    }
+    pieces.pop_back();
+  }
+}
+
+void Board::addPiece(Pieza* piece) { pieces.push_back(piece); }
+
 void Board::initializeStandardSetup()
 {
-  clearBoard();
+  clearGrid();
   for (int i = 0; i < BOARD_SIZE; i++)
   {
-    setPiece(1, i, new Pawn('a' + i, '2', PieceColor::WHITE));
-    setPiece(6, i, new Pawn('a' + 1, '7', PieceColor::BLACK));
+    addPiece(new Pawn('a' + i, '2', PieceColor::WHITE));
+    addPiece(new Pawn('a' + i, '7', PieceColor::BLACK));
   }
+  updateGrid();
 }
 
 void Board::display() const
 {
-  for (Pieza* p : w_out)
-  {
-    std::cout << getchar(p);
-  }
   for (int row = 0; row < BOARD_SIZE; row++)
   {
     std::cout << std::endl << "  +---+---+---+---+---+---+---+---+" << std::endl;
@@ -62,65 +71,14 @@ void Board::display() const
     {
       if ((row + col) % 2 == 0)
       {
-        std::cout << " " << getchar(grid[row][col]) << " |";
+        std::cout << " " << grid[col][row] << " |";
       }
       else
       {
-        std::cout << "-" << getchar(grid[row][col]) << "-|";
+        std::cout << "-" << grid[col][row] << "-|";
       }
     }
   }
   std::cout << std::endl << "  +---+---+---+---+---+---+---+---+" << std::endl;
   std::cout << "    a   b   c   d   e   f   g   h" << std::endl << std::endl;
-  for (Pieza* p : b_out)
-  {
-    std::cout << getchar(p);
-  }
-}
-
-void Board::addPieceOut(bool side, Pieza* piece)
-{
-  int idx = 0;
-  if (side)
-  {
-    while (idx < Board::MAX_OUT_EACH_SIDE_BOARD && w_out[idx])
-    {
-      idx++;
-    }
-    if (idx < Board::MAX_OUT_EACH_SIDE_BOARD)
-    {
-      w_out[idx] = piece;
-    }
-    else
-    {
-      throw std::runtime_error("White out stack is full.");
-    }
-  }
-  else
-  {
-    while (idx < Board::MAX_OUT_EACH_SIDE_BOARD && b_out[idx])
-    {
-      idx++;
-    }
-    if (idx < Board::MAX_OUT_EACH_SIDE_BOARD)
-    {
-      b_out[idx] = piece;
-    }
-    else
-    {
-      throw std::runtime_error("Black out stack is full.");
-    }
-  }
-}
-
-void Board::setPiece(int row, int col, Pieza* piece)
-{
-  if (0 <= row && row < BOARD_SIZE && 0 <= col && col < BOARD_SIZE)
-  {
-    if (grid[row][col])
-    {
-      addPieceOut(grid[row][col]->is_white(), grid[row][col]);
-    }
-    grid[row][col] = piece;
-  }
 }

@@ -28,7 +28,8 @@ class Pieza
 
     const bool is_black() const;
     const bool is_white() const;
-    void       set_position(char f, char r);
+    void       set_position(const char f, const char r);
+    void       get_position(char& f, char& r);
     const char get_representation() const;
 
     virtual ~Pieza()                                        = default;

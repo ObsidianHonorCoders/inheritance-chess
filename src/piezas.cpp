@@ -17,7 +17,7 @@ Pieza::Pieza(PieceColor col, PieceType typ) : color(col), type(typ) { set_positi
 const bool Pieza::is_black() const { return color == PieceColor::BLACK; }
 const bool Pieza::is_white() const { return color == PieceColor::WHITE; }
 
-void Pieza::set_position(char f, char r)
+void Pieza::set_position(const char f, const char r)
 {
   if ('a' <= f && f <= 'h')
   {
@@ -35,6 +35,12 @@ void Pieza::set_position(char f, char r)
   {
     position.rank = ' ';
   }
+}
+
+void Pieza::get_position(char& f, char& r)
+{
+  f = position.file;
+  r = position.rank;
 }
 
 const char Pieza::get_representation() const
