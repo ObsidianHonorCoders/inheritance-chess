@@ -37,13 +37,18 @@
 *.out
 *.app
 
-# debug information files
+# Debug information files
 *.dwo
 
-#build directories
+# Build folders
 build/
 bin/
 obj/
+
+# Documentation folders
+doc/
+html/
+latex/
 
 # VS Code
 .vscode/
