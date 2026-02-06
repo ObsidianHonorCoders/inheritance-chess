@@ -1,4 +1,4 @@
-# Inheritance Chess
+# <img src="https://raw.githubusercontent.com/Calileus/inheritance-chess/a3586f043568fc36b0fb3fe72d9ef45164db4b38/.github/inheritance-chess-icon.png" alt="inheritance-chess-icon" width="120" height="120"> Inheritance Chess
 
 ## Overview
 
