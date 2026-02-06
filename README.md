@@ -1,6 +1,6 @@
 # Inheritance Chess
 
-<img src="https://raw.githubusercontent.com/Calileus/inheritance-chess/a3586f043568fc36b0fb3fe72d9ef45164db4b38/.github/inheritance-chess-icon.png" alt="inheritance-chess-icon" width="150" height="150">
+<img src="https://raw.githubusercontent.com/Calileus/inheritance-chess/a161e37a0641c0c9bf320bb5716651b8efa9d9cf/.github/inheritance-chess-icon.png" alt="inheritance-chess-icon" width="150" height="105">
 
 ## Overview
 
