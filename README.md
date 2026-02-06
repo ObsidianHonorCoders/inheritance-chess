@@ -18,8 +18,8 @@ Inheritance Chess is an enterprise-grade C++ chess engine that demonstrates obje
 
 - **Language**: C++ 17
 - **Build System**: CMake 3.28+
-- **Documentation**: Doxygen with Awesome CSS theme
-- **Platform Support**: Windows, Linux
+- **Documentation**: Doxygen
+- **Platform Support**: Windows and Linux
 - **License**: Apache License 2.0
 
 ## Repository Structure
@@ -43,7 +43,7 @@ inheritance-chess/
 └── README.md                  # This file
 ```
 
-**Directory Descriptions**
+**Folder Descriptions**
 - **include/**: Public declarations defining the chess engine's interface.
 - **src/**: Implementation of core chess engine components.
 - **build/**: Temporary directory containing compilation artifacts and build outputs (Not commited).
