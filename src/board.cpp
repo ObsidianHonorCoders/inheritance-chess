@@ -1,16 +1,25 @@
 /// ---------------------------------------------------------------------------------
 /// @file      board.cpp
 /// @author    Calileus (https://github.com/Calileus/inheritance-chess)
-/// @brief     Chess board console type and display.
+/// @brief     Implementation of the Board class for chess game state management.
+/// @details   Provides implementation for piece management, grid updates, and
+///            console-based board visualization using ASCII art.
 /// @version   1.0
 /// @date      2026-01-22
 /// @copyright MIT License - see LICENSE file for details
 /// ---------------------------------------------------------------------------------
 #include "board.hpp"
 
+/// @brief   Construct the Board.
+/// @details Initializes a new board with an empty grid.
 Board::Board() { clearGrid(); }
+
+/// @brief   Destruct the Board.
+/// @details Cleans up all pieces and frees allocated memory.
 Board::~Board() { cleanPieces(); }
 
+/// @brief   Clear the board grid.
+/// @details Sets all grid cells to space characters, effectively clearing the board display.
 void Board::clearGrid()
 {
   for (int i = 0; i < Board::BOARD_SIZE; i++)
@@ -22,6 +31,9 @@ void Board::clearGrid()
   }
 }
 
+/// @brief   Update the grid representation from piece positions.
+/// @details Iterates through all pieces and updates their positions in the grid.
+///          Converts file/rank coordinates to grid array indices.
 void Board::updateGrid()
 {
   char f = ' ', r = ' ';
@@ -35,6 +47,9 @@ void Board::updateGrid()
   }
 }
 
+/// @brief   Remove and delete all pieces from the board.
+/// @details Iterates through the pieces container in reverse order, deletes each piece,
+///          and removes it from the vector to prevent memory leaks.
 void Board::cleanPieces()
 {
   for (size_t i = pieces.size(); i > 0; i--)
@@ -48,8 +63,14 @@ void Board::cleanPieces()
   }
 }
 
+/// @brief   Add a piece to the board.
+/// @param   piece Pointer to the Pieza object to add. Deletion is managed by Borad class.
+/// @details The board takes ownership of the piece and will manage its lifetime.
 void Board::addPiece(Pieza* piece) { pieces.push_back(piece); }
 
+/// @brief   Initialize the board with standard chess starting position.
+/// @details Creates white pawns on rank 2 and black pawns on rank 7.
+///          Updates the grid representation after placing pieces.
 void Board::initializeStandardSetup()
 {
   clearGrid();
@@ -61,6 +82,12 @@ void Board::initializeStandardSetup()
   updateGrid();
 }
 
+/// @brief   Display the current board state to console.
+/// @details Outputs an ASCII representation of the chess board with:
+///          - Piece positions from the internal grid
+///          - Alternating square shading using '-' and space characters
+///          - File labels (a-h) along the bottom
+///          - Rank numbers (1-8) along the left side
 void Board::display() const
 {
   for (int row = 0; row < BOARD_SIZE; row++)

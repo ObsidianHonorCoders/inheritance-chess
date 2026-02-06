@@ -1,7 +1,9 @@
 /// ---------------------------------------------------------------------------------
 /// @file      board.hpp
 /// @author    Calileus (https://github.com/Calileus/inheritance-chess)
-/// @brief     Chess board console type and display.
+/// @brief     Chess board management and console display.
+/// @details   Defines the Board class that manages chess pieces, board state,
+///            and provides console-based visualization.
 /// @version   1.0
 /// @date      2026-01-22
 /// @copyright MIT License - see LICENSE file for details
@@ -15,24 +17,53 @@
 #include "common.hpp"
 #include "pawns.hpp"
 
+/// @class   Board
+/// @brief   Manages the chess board state and piece placement.
+/// @details The Board class handles piece management, maintains a grid representation
+///          of the board state, and provides console-based display functionality.
 class Board
 {
   public:
-    static constexpr int BOARD_SIZE              = 8;
-    static constexpr int MAX_OUT_EACH_SIDE_BOARD = 15;
+    static constexpr int BOARD_SIZE              = 8;  ///< Standard chess board size (8x8)
+    static constexpr int MAX_OUT_EACH_SIDE_BOARD = 15; ///< Maximum display padding on each side
 
+    /// @brief   Construct a new Board.
+    /// @details Initializes an empty board with cleared grid.
     Board();
+
+    /// @brief   Destruct the Board.
+    /// @details Cleans up all pieces and frees allocated memory.
     ~Board();
+
+    /// @brief   Clear all pieces from the grid.
+    /// @details Sets all grid positions to space character ' '.
     void clearGrid();
+
+    /// @brief   Update the grid representation from current piece positions.
+    /// @details Synchronizes the visual grid with the actual piece positions.
     void updateGrid();
+
+    /// @brief   Delete all pieces and clear the pieces container.
+    /// @details Frees memory for all dynamically allocated pieces.
     void cleanPieces();
+
+    /// @brief Add a piece to the board.
+    /// @param piece Pointer to the Pieza object to add.
+    /// @note  The board takes ownership of the piece pointer.
     void addPiece(Pieza* piece);
+
+    /// @brief   Initialize the board with standard chess starting position.
+    /// @details Sets up all pawns in their starting positions for a new game.
     void initializeStandardSetup();
+
+    /// @brief   Display the current board state to console.
+    /// @details Outputs an ASCII representation of the board with piece positions,
+    ///          file labels (a-h) and rank numbers (1-8).
     void display() const;
 
   private:
-    std::vector<Pieza*>                                  pieces = {};
-    std::array<std::array<char, BOARD_SIZE>, BOARD_SIZE> grid   = {};
+    std::vector<Pieza*>                                  pieces = {}; ///< Collection of pieces currently on the board
+    std::array<std::array<char, BOARD_SIZE>, BOARD_SIZE> grid   = {}; ///< 8x8 character grid for display
 };
 
 #endif // ICHESS_SRC_BOARD
