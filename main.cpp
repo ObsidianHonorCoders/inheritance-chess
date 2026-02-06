@@ -24,6 +24,7 @@ int main()
   Pawn black_pawn('d', '7', PieceColor::BLACK);
 
   Board chessBoard;
+  chessBoard.initializeStandardSetup();
 
   std::cout << "Standard Chess Starting Position:" << std::endl;
   chessBoard.display();

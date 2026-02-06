@@ -38,7 +38,15 @@ void Board::clearBoard()
   }
 }
 
-void Board::initializeStandardSetup() {}
+void Board::initializeStandardSetup()
+{
+  clearBoard();
+  for (int i = 0; i < BOARD_SIZE; i++)
+  {
+    setPiece(1, i, new Pawn('a' + i, '2', PieceColor::WHITE));
+    setPiece(6, i, new Pawn('a' + 1, '7', PieceColor::BLACK));
+  }
+}
 
 void Board::display() const
 {
