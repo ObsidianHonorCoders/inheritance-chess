@@ -1,4 +1,3 @@
-/// ---------------------------------------------------------------------------------
 /// @file      main.cpp
 /// @author    Calileus (https://github.com/Calileus/inheritance-chess)
 /// @brief     Entry point for the Inheritance Chess Engine application.
@@ -8,7 +7,6 @@
 /// @version   1.0
 /// @date      2025-12-30
 /// @copyright MIT License - see LICENSE file for details
-/// ---------------------------------------------------------------------------------
 
 #include <iostream>
 #include <string>
