@@ -11,6 +11,7 @@
 #include "pawns.hpp"
 #include "rook.hpp"
 #include "knight.hpp"
+#include "bishop.hpp"
 
 /// @brief   Construct the Board.
 /// @details Initializes a new board with an empty grid.
@@ -71,7 +72,7 @@ void Board::cleanPieces()
 void Board::addPiece(Piece* piece) { pieces.push_back(piece); }
 
 /// @brief   Initialize the board with standard chess starting position.
-/// @details Creates white pawns on rank 2 and black pawns on rank 7.
+/// @details Creates white pices on rank 1 and 2 and black pieces on rank 7 and 8.
 ///          Updates the grid representation after placing pieces.
 void Board::initializeStandardSetup()
 {
@@ -89,6 +90,10 @@ void Board::initializeStandardSetup()
   addPiece(new Knight('g', '1', PieceColor::WHITE));
   addPiece(new Knight('b', '8', PieceColor::BLACK));
   addPiece(new Knight('g', '8', PieceColor::BLACK));
+  addPiece(new Bishop('c', '1', PieceColor::WHITE));
+  addPiece(new Bishop('f', '1', PieceColor::WHITE));
+  addPiece(new Bishop('c', '8', PieceColor::BLACK));
+  addPiece(new Bishop('f', '8', PieceColor::BLACK));
   updateGrid();
 }
 
