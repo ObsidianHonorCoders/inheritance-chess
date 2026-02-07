@@ -1,7 +1,7 @@
 /// @file      pawns.hpp
 /// @author    Calileus (https://github.com/Calileus/inheritance-chess)
 /// @brief     Pawn piece implementation for the chess engine.
-/// @details   Defines the Pawn class that inherits from Pieza and implements
+/// @details   Defines the Pawn class that inherits from Piece and implements
 ///            pawn-specific movement rules for the chess game.
 /// @version   1.0
 /// @date      2026-01-01
@@ -10,21 +10,21 @@
 #ifndef ICHESS_SRC_PAWNS
 #define ICHESS_SRC_PAWNS
 
-#include "piezas.hpp"
+#include "pieces.hpp"
 
 /// @class   Pawn
 /// @brief   Represents a Pawn chess piece.
-/// @details Inherits from Pieza and implements pawn-specific movement rules.
+/// @details Inherits from Piece and implements pawn-specific movement rules.
 ///          Pawns move forward one square (or two squares from their starting position)
 ///          and capture diagonally.
-class Pawn : public Pieza
+class Pawn : public Piece
 {
   public:
     /// @brief Construct a Pawn at the specified position and color.
     /// @param file The file (column) coordinate ('a' to 'h').
     /// @param rank The rank (row) coordinate ('1' to '8').
     /// @param color The color of the pawn (WHITE or BLACK).
-    Pawn(char file, char rank, PieceColor color) : Pieza(color, PieceType::PAWN) { set_position(file, rank); }
+    Pawn(char file, char rank, PieceColor color) : Piece(color, PieceType::PAWN) { set_position(file, rank); }
 
     /// @brief Virtual destructor for proper cleanup.
     virtual ~Pawn() override {};

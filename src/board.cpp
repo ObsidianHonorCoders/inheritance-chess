@@ -36,7 +36,7 @@ void Board::clearGrid()
 void Board::updateGrid()
 {
   char f = ' ', r = ' ';
-  for (Pieza* p : pieces)
+  for (Piece* p : pieces)
   {
     if (p)
     {
@@ -63,9 +63,9 @@ void Board::cleanPieces()
 }
 
 /// @brief   Add a piece to the board.
-/// @param   piece Pointer to the Pieza object to add. Deletion is managed by Borad class.
+/// @param   piece Pointer to the Piece object to add. Deletion is managed by Borad class.
 /// @details The board takes ownership of the piece and will manage its lifetime.
-void Board::addPiece(Pieza* piece) { pieces.push_back(piece); }
+void Board::addPiece(Piece* piece) { pieces.push_back(piece); }
 
 /// @brief   Initialize the board with standard chess starting position.
 /// @details Creates white pawns on rank 2 and black pawns on rank 7.

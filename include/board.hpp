@@ -48,7 +48,7 @@ class Board
 
     /// @brief Add a piece to the board.
     /// @note  The board takes ownership of the piece pointer.
-    void addPiece(Pieza* piece);
+    void addPiece(Piece* piece);
 
     /// @brief   Initialize the board with standard chess starting position.
     /// @details Sets up all pawns in their starting positions for a new game.
@@ -60,7 +60,7 @@ class Board
     void display() const;
 
   private:
-    std::vector<Pieza*>                                  pieces = {}; ///< Collection of pieces currently on the board
+    std::vector<Piece*>                                  pieces = {}; ///< Collection of pieces currently on the board
     std::array<std::array<char, BOARD_SIZE>, BOARD_SIZE> grid   = {}; ///< 8x8 character grid for display
 };
 
