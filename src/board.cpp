@@ -27,9 +27,9 @@ Board::~Board() { cleanPieces(); }
 /// @details Sets all grid cells to space characters, effectively clearing the board display.
 void Board::clearGrid()
 {
-  for (int i = 0; i < Board::BOARD_SIZE; i++)
+  for (int i = 0; i < BOARD_SIZE; i++)
   {
-    for (int j = 0; j < Board::BOARD_SIZE; j++)
+    for (int j = 0; j < BOARD_SIZE; j++)
     {
       grid[i][j] = ' ';
     }

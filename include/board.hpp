@@ -16,6 +16,14 @@
 #include "common.hpp"
 #include "pieces.hpp"
 
+inline constexpr int BOARD_SIZE              = 8;  ///< Standard chess board size (8x8)
+inline constexpr int MAX_OUT_EACH_SIDE_BOARD = 15; ///< Maximum display padding on each side
+
+/// @brief A matix of characters representing chess pieces.
+/// @note  This container has fixed size. It store char that represent how pieces are
+///        goig to be displayed on the console. Space ' ' shall be used for empty square.
+using BoardGrid = std::array<std::array<char, BOARD_SIZE>, BOARD_SIZE>;
+
 /// @class   Board
 /// @brief   Manages the chess board state and piece placement.
 /// @details The Board class handles piece management, maintains a grid representation
@@ -23,9 +31,6 @@
 class Board
 {
   public:
-    static constexpr int BOARD_SIZE              = 8;  ///< Standard chess board size (8x8)
-    static constexpr int MAX_OUT_EACH_SIDE_BOARD = 15; ///< Maximum display padding on each side
-
     /// @brief   Construct a new Board.
     /// @details Initializes an empty board with cleared grid.
     Board();
@@ -60,8 +65,8 @@ class Board
     void display() const;
 
   private:
-    PieceList                                            pieces = {}; ///< Collection of pieces currently on the board
-    std::array<std::array<char, BOARD_SIZE>, BOARD_SIZE> grid   = {}; ///< 8x8 character grid for display
+    PieceList pieces = {}; ///< Collection of pieces currently on the board
+    BoardGrid grid   = {}; ///< 8x8 character grid for display
 };
 
 #endif // ICHESS_SRC_BOARD
