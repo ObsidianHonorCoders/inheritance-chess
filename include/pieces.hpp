@@ -69,13 +69,13 @@ class Piece
     /// @note       Must be implemented by derived classes for their specific movement rules.
     virtual void moves(std::vector<PiecePosition>& p, const std::vector<Piece*> other) const = 0;
 
-    /// @brief       Pure virtual method to calculate valid moves for the piece.
-    /// @param[out]  p      Vector to be filled with valid move positions.
-    /// @param[in]   other_p  Vector of positions of all other pieces on the board for move validation.
-    /// @param[in]   other_c  Vector of colors corresponding to each piece in oth_p for determining valid captures.
-    /// @note        Must be implemented by derived classes for their specific movement rules.
-    /// @details     This overload provides piece positions and colors separately, allowing independent
-    ///              validation of piece positions and ownership for move calculation.
+    /// @brief      Pure virtual method to calculate valid moves for the piece.
+    /// @param[out] p       Vector to be filled with valid move positions.
+    /// @param[in]  other_p Vector of positions of all other pieces on the board for move validation.
+    /// @param[in]  other_c Vector of colors corresponding to each piece in oth_p for determining valid captures.
+    /// @note       Must be implemented by derived classes for their specific movement rules.
+    /// @details    This overload provides piece positions and colors separately, allowing independent
+    ///             validation of piece positions and ownership for move calculation.
     virtual void
     moves(std::vector<PiecePosition>& p, const std::vector<PiecePosition> other_p, const std::vector<PieceColor> other_c) const = 0;
 };

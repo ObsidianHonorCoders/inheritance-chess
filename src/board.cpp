@@ -9,6 +9,7 @@
 
 #include "board.hpp"
 #include "pawns.hpp"
+#include "rook.hpp"
 
 /// @brief   Construct the Board.
 /// @details Initializes a new board with an empty grid.
@@ -79,6 +80,10 @@ void Board::initializeStandardSetup()
     addPiece(new Pawn('a' + i, '2', PieceColor::WHITE));
     addPiece(new Pawn('a' + i, '7', PieceColor::BLACK));
   }
+  addPiece(new Rook('a', '1', PieceColor::WHITE));
+  addPiece(new Rook('h', '1', PieceColor::WHITE));
+  addPiece(new Rook('a', '8', PieceColor::BLACK));
+  addPiece(new Rook('h', '8', PieceColor::BLACK));
   updateGrid();
 }
 
