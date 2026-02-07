@@ -8,6 +8,7 @@
 /// @copyright MIT License - see LICENSE file for details
 
 #include <iostream>
+
 #include "pawns.hpp"
 
 /// @brief      Calculate valid moves for this pawn.
