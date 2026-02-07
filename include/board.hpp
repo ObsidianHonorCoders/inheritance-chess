@@ -60,7 +60,7 @@ class Board
     void display() const;
 
   private:
-    std::vector<Piece*>                                  pieces = {}; ///< Collection of pieces currently on the board
+    PieceList                                            pieces = {}; ///< Collection of pieces currently on the board
     std::array<std::array<char, BOARD_SIZE>, BOARD_SIZE> grid   = {}; ///< 8x8 character grid for display
 };
 

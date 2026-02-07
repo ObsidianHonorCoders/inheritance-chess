@@ -33,7 +33,7 @@ class Rook : public Piece
     /// @param[in]  other Vector of pointers to all other pieces on the board for move validation.
     /// @throws     std::runtime_error if the piece has an invalid color.
     /// @note       Rooks move horizontally and vertically without restriction.
-    virtual void moves(std::vector<PiecePosition>& p, const std::vector<Piece*> other) const override;
+    virtual void moves(std::vector<PiecePosition>& p, const PieceList other) const override;
 
     /// @brief      Calculate valid moves for this rook.
     /// @param[out] p        Vector to be filled with valid move positions.

@@ -10,7 +10,7 @@
 #include <iostream>
 #include "bishop.hpp"
 
-void Bishop::moves(std::vector<PiecePosition>& p, const std::vector<Piece*> other) const {}
+void Bishop::moves(std::vector<PiecePosition>& p, const PieceList other) const {}
 
 void Bishop::moves(std::vector<PiecePosition>&      p,
                    const std::vector<PiecePosition> other_p,

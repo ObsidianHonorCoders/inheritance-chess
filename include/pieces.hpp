@@ -80,6 +80,11 @@ class Piece
     moves(std::vector<PiecePosition>& p, const std::vector<PiecePosition> other_p, const std::vector<PieceColor> other_c) const = 0;
 };
 
+/// @brief A list of pointers to chess pieces.
+/// @note  This container does NOT own the memory. Objects must be manually deleted
+///        or managed by the Board class to avoid memory leaks.
+using PieceList = std::vector<Piece*>;
+
 /// @brief  Helper function to safely get the character representation of a piece pointer.
 /// @param  p Pointer to a Piece object (may be null).
 /// @return Character representation of the piece, or space ' ' if pointer is null.

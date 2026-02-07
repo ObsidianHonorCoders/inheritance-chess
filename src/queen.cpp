@@ -10,7 +10,7 @@
 #include <iostream>
 #include "queen.hpp"
 
-void Queen::moves(std::vector<PiecePosition>& p, const std::vector<Piece*> other) const {}
+void Queen::moves(std::vector<PiecePosition>& p, const PieceList other) const {}
 
 void Queen::moves(std::vector<PiecePosition>& p, const std::vector<PiecePosition> other_p, const std::vector<PieceColor> other_c) const
 {
