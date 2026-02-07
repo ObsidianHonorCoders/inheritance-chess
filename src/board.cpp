@@ -12,6 +12,7 @@
 #include "rook.hpp"
 #include "knight.hpp"
 #include "bishop.hpp"
+#include "queen.hpp"
 #include "king.hpp"
 
 /// @brief   Construct the Board.
@@ -95,6 +96,8 @@ void Board::initializeStandardSetup()
   addPiece(new Bishop('f', '1', PieceColor::WHITE));
   addPiece(new Bishop('c', '8', PieceColor::BLACK));
   addPiece(new Bishop('f', '8', PieceColor::BLACK));
+  addPiece(new Queen('d', '1', PieceColor::WHITE));
+  addPiece(new Queen('d', '8', PieceColor::BLACK));
   addPiece(new King('e', '1', PieceColor::WHITE));
   addPiece(new King('e', '8', PieceColor::BLACK));
   updateGrid();
