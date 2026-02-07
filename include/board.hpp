@@ -14,7 +14,7 @@
 #include <iostream>
 
 #include "common.hpp"
-#include "pawns.hpp"
+#include "pieces.hpp"
 
 /// @class   Board
 /// @brief   Manages the chess board state and piece placement.

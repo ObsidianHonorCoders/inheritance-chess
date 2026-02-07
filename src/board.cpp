@@ -8,6 +8,7 @@
 /// @copyright MIT License - see LICENSE file for details
 
 #include "board.hpp"
+#include "pawns.hpp"
 
 /// @brief   Construct the Board.
 /// @details Initializes a new board with an empty grid.

@@ -30,22 +30,22 @@ class Pawn : public Piece
     virtual ~Pawn() override {};
 
     /// @brief      Calculate valid moves for this pawn.
-    /// @param[out] p Vector to be filled with valid move positions.
+    /// @param[out] p     Vector to be filled with valid move positions.
+    /// @param[in]  other Vector of pointers to all other pieces on the board for move validation.
     /// @throws     std::runtime_error if the piece has an invalid color.
     /// @note       Implementation distinguishes between white and black pawns for directional movement.
-    virtual void moves(std::vector<PiecePosition>& p) const override
-    {
-      if (is_black())
-      {
-      }
-      else if (is_white())
-      {
-      }
-      else
-      {
-        throw std::runtime_error("Invalid piece color");
-      }
-    }
+    virtual void moves(std::vector<PiecePosition>& p, const std::vector<Piece*> other) const override;
+
+    /// @brief      Calculate valid moves for this pawn.
+    /// @param[out] p        Vector to be filled with valid move positions.
+    /// @param[in]  other_p  Vector of positions of all other pieces on the board for move validation.
+    /// @param[in]  other_c  Vector of colors corresponding to each piece in oth_p for determining valid captures.
+    /// @throws     std::runtime_error if the piece has an invalid color.
+    /// @note       Implementation distinguishes between white and black pawns for directional movement.
+    /// @details    This overload provides piece positions and colors separately for move calculation.
+    virtual void moves(std::vector<PiecePosition>&      p,
+                       const std::vector<PiecePosition> other_p,
+                       const std::vector<PieceColor>    other_c) const override;
 };
 
 #endif // ICHESS_SRC_PAWNS
