@@ -12,6 +12,7 @@
 #include "rook.hpp"
 #include "knight.hpp"
 #include "bishop.hpp"
+#include "king.hpp"
 
 /// @brief   Construct the Board.
 /// @details Initializes a new board with an empty grid.
@@ -94,6 +95,8 @@ void Board::initializeStandardSetup()
   addPiece(new Bishop('f', '1', PieceColor::WHITE));
   addPiece(new Bishop('c', '8', PieceColor::BLACK));
   addPiece(new Bishop('f', '8', PieceColor::BLACK));
+  addPiece(new King('e', '1', PieceColor::WHITE));
+  addPiece(new King('e', '8', PieceColor::BLACK));
   updateGrid();
 }
 
