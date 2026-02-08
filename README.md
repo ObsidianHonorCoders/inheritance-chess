@@ -48,3 +48,8 @@ inheritance-chess/
 - **src/**: Implementation of core chess engine components.
 - **build/**: Temporary directory containing compilation artifacts and build outputs (Not commited).
 - **doc/**: Generated HTML and reference documentation (Not commited).
+
+## Project Management
+
+This project is managed using an engineering-focused Kanban board.
+See [Kanban workflow](docs/kanban.md) for details on columns and flow.
