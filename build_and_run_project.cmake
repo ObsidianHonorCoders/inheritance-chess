@@ -64,7 +64,7 @@
 ## @date 2026
 ################################################################################
 
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.28)
 
 ## @var EXE_NAME
 ## @brief Name of the executable to build
@@ -76,87 +76,20 @@ set(EXE_NAME "ichess_runner")
 ## @details All build files and the executable will be placed here
 set(BUILD_DIR "build")
 
-################################################################################
-## @name Platform and Architecture Detection
-## @brief Identify the host system capabilities
-################################################################################
-
-message("================================ BUILD SYSTEM ================================")
-
-## @section platform_id Platform Identification
-## @brief Detects the operating system using CMake built-in variables
-
+## @section exe_location Executable Path Resolution
+## @brief Constructs the path to the compiled executable
+## Accounts for platform differences: .exe on Windows, bare name on Unix
 if(WIN32)
-    set(DETECTED_PLATFORM "Windows")
-    message("Platform: Windows")
-elseif(APPLE)
-    set(DETECTED_PLATFORM "macOS")
-    message("Platform: macOS")
-elseif(UNIX)
-    set(DETECTED_PLATFORM "Linux")
-    message("Platform: Linux")
+    set(EXE_PATH "${BUILD_DIR}/${EXE_NAME}.exe")
 else()
-    set(DETECTED_PLATFORM "Unknown")
-    message("Platform: Unknown")
+    set(EXE_PATH "${BUILD_DIR}/${EXE_NAME}")
 endif()
 
-## @section arch_id System Architecture Detection  
-## @brief Determines the processor architecture of the host system
+include(cmakehelpers/detect_generator.cmake)
 
-if(DEFINED ENV{PROCESSOR_ARCHITECTURE})
-    set(DETECTED_ARCH "$ENV{PROCESSOR_ARCHITECTURE}")
-    message("Architecture: ${DETECTED_ARCH}")
-else()
-    set(DETECTED_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
-    message("Architecture: ${DETECTED_ARCH}")
-endif()
-
-## @section cores_detect CPU Core Detection
-## @brief Counts the number of available processor cores using ProcessorCount module
-## This value is used to enable parallel compilation with --parallel flag
-include(ProcessorCount)
-ProcessorCount(NUM_CORES)
-
-## @brief Validate core count and ensure minimum of 1
-if(NOT NUM_CORES GREATER_EQUAL 1)
-	set(NUM_CORES 1)
-endif()
-
-message("Available CPU Cores: ${NUM_CORES}")
-
-################################################################################
-## @name Compiler and Generator Detection
-## @brief Identify available build tools and select appropriate generator
-################################################################################
-
-## @section tool_discovery Tool Discovery
-## @brief Searches for common build generators and compilers in system PATH
-
-## @var NINJA_PATH
-## @brief Full path to ninja executable if found
-find_program(NINJA_PATH ninja)
-
-## @var GCC_PATH
-## @brief Full path to GCC compiler if found
-find_program(GCC_PATH gcc)
-
-## @var MAKE_PATH
-## @brief Full path to MinGW make executable if found
-find_program(MAKE_PATH mingw32-make)
-
-## @section generator_selection CMake Generator Selection
-## @brief Chooses the most appropriate build system generator
-## Selection priority: Ninja (fastest) > MinGW Makefiles (GCC) > System Default
-if(NINJA_PATH)
-    set(GENERATOR "Ninja")
-    message("Using Generator: Ninja (fast parallel build system)")
-elseif(CMAKE_HOST_WIN32 AND GCC_PATH AND MAKE_PATH)
-    set(GENERATOR "MinGW Makefiles")
-    message("Using Generator: MinGW Makefiles (GCC-based)")
-else()
-    set(GENERATOR "")
-    message("Using Generator: Trying System Default")
-endif()
+message(STATUS "Build Type:    Release (optimized build)")
+message(STATUS "Build Dir:     ${BUILD_DIR}/")
+message(STATUS "Executable:    ${EXE_PATH}")
 
 ################################################################################
 ## @name CMake Configuration Phase
@@ -212,6 +145,11 @@ message("================================ BUILD PHASE ==========================
 ## @brief Compiles the project using all detected CPU cores
 ## The --parallel flag is critical for utilizing multi-core systems
 
+## @brief Validate core count and ensure minimum of 1
+if(NOT NUM_CORES GREATER_EQUAL 1)
+	set(NUM_CORES 1)
+endif()
+
 ## @var   BUILD_COMMAND_ARGS
 ## @brief Arguments for cmake --build command
 set(BUILD_COMMAND_ARGS --build ${BUILD_DIR} --config Release --parallel ${NUM_CORES})
@@ -245,15 +183,6 @@ message(STATUS "Build completed successfully using all ${NUM_CORES} CPU cores")
 
 message("================================ EXECUTION PHASE ==============================")
 
-## @section exe_location Executable Path Resolution
-## @brief Constructs the path to the compiled executable
-## Accounts for platform differences: .exe on Windows, bare name on Unix
-
-if(WIN32)
-    set(EXE_PATH "${BUILD_DIR}/${EXE_NAME}.exe")
-else()
-    set(EXE_PATH "${BUILD_DIR}/${EXE_NAME}")
-endif()
 
 message(STATUS "Looking for executable at: ${EXE_PATH}")
 
@@ -285,17 +214,3 @@ This usually means:
 - The executable name is incorrect (check EXE_NAME variable)
 - The project's CMakeLists.txt does not create an executable target")
 endif()
-
-################################################################################
-## @name Build Summary
-## @brief Final report showing build configuration and results
-################################################################################
-
-message("================================ BUILD COMPLETE ===============================")
-message(STATUS "Platform:      ${DETECTED_PLATFORM} (${DETECTED_ARCH})")
-message(STATUS "Generator:     ${GENERATOR}")
-message(STATUS "CPU Cores:     ${NUM_CORES}")
-message(STATUS "Build Type:    Release (optimized build)")
-message(STATUS "Build Dir:     ${BUILD_DIR}/")
-message(STATUS "Executable:    ${EXE_PATH}")
-message("================================================================================")
