@@ -1,7 +1,7 @@
-/// @file      piezas.hpp
+/// @file      pieces.hpp
 /// @author    Calileus (https://github.com/Calileus/inheritance-chess)
 /// @brief     Base class for all chess pieces using polymorphism.
-/// @details   Defines the abstract Pieza (piece) class that serves as the base
+/// @details   Defines the abstract Piece (piece) class that serves as the base
 ///            for all specific piece types in the chess engine.
 /// @version   1.0
 /// @date      2026-01-01
@@ -15,12 +15,12 @@
 
 #include "common.hpp"
 
-/// @class   Pieza
+/// @class   Piece
 /// @brief   Base abstract class representing a chess piece.
 /// @details This class serves as the polymorphic base for all chess pieces (pawns, knights, etc.)
 ///          It manages piece color, position, and type. Derived classes must implement
 ///          the moves() method to define piece-specific movement rules.
-class Pieza
+class Piece
 {
   private:
     PieceColor    color;    ///< Color of the piece (white, black, or none)
@@ -28,14 +28,14 @@ class Pieza
     PieceType     type;     ///< Type of the piece (pawn, knight, bishop, etc.)
 
     /// @brief   Private default constructor.
-    /// @details Prevents instantiation of Pieza without a color and type.
-    Pieza();
+    /// @details Prevents instantiation of Piece without a color and type.
+    Piece();
 
   public:
-    /// @brief Construct a Pieza with specified color and type.
+    /// @brief Construct a Piece with specified color and type.
     /// @param col The color of the piece (WHITE or BLACK).
     /// @param typ The type of the piece (PAWN, KNIGHT, BISHOP, ROOK, QUEEN, or KING).
-    Pieza(PieceColor col, PieceType typ);
+    Piece(PieceColor col, PieceType typ);
 
     /// @brief  Checks if the piece is black.
     /// @return True if the piece color is BLACK, false otherwise.
@@ -61,17 +61,33 @@ class Pieza
     const char get_representation() const;
 
     /// @brief Virtual destructor for proper cleanup in derived classes.
-    virtual ~Pieza() = default;
+    virtual ~Piece() = default;
 
     /// @brief      Pure virtual method to calculate valid moves for the piece.
-    /// @param[out] p Vector to be filled with valid move positions.
+    /// @param[out] p     Vector to be filled with valid move positions.
+    /// @param[in]  other Vector of pointers to all other pieces on the board for move validation.
     /// @note       Must be implemented by derived classes for their specific movement rules.
-    virtual void moves(std::vector<PiecePosition>& p) const = 0;
+    virtual void moves(std::vector<PiecePosition>& p, const std::vector<Piece*> other) const = 0;
+
+    /// @brief      Pure virtual method to calculate valid moves for the piece.
+    /// @param[out] p       Vector to be filled with valid move positions.
+    /// @param[in]  other_p Vector of positions of all other pieces on the board for move validation.
+    /// @param[in]  other_c Vector of colors corresponding to each piece in oth_p for determining valid captures.
+    /// @note       Must be implemented by derived classes for their specific movement rules.
+    /// @details    This overload provides piece positions and colors separately, allowing independent
+    ///             validation of piece positions and ownership for move calculation.
+    virtual void
+    moves(std::vector<PiecePosition>& p, const std::vector<PiecePosition> other_p, const std::vector<PieceColor> other_c) const = 0;
 };
 
+/// @brief A list of pointers to chess pieces.
+/// @note  This container does NOT own the memory. Objects must be manually deleted
+///        or managed by the Board class to avoid memory leaks.
+using PieceList = std::vector<Piece*>;
+
 /// @brief  Helper function to safely get the character representation of a piece pointer.
-/// @param  p Pointer to a Pieza object (may be null).
+/// @param  p Pointer to a Piece object (may be null).
 /// @return Character representation of the piece, or space ' ' if pointer is null.
-inline const char getchar(Pieza* p) { return (p ? p->get_representation() : ' '); }
+inline const char getchar(Piece* p) { return (p ? p->get_representation() : ' '); }
 
 #endif // ICHESS_SRC_PIEZAS

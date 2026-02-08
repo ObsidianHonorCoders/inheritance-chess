@@ -25,9 +25,6 @@ int main()
   std::cout << "====================================" << std::endl;
   std::cout << "Starting Inheritance Chess!" << std::endl;
 
-  Pawn white_pawn('e', '2', PieceColor::WHITE);
-  Pawn black_pawn('d', '7', PieceColor::BLACK);
-
   Board chessBoard;
   chessBoard.initializeStandardSetup();
 
