@@ -9,6 +9,7 @@
 ## @section script_outputs Outputs (Variables set in parent scope or Cache)
 ## - DETECTED_PLATFORM:  The string name of the detected operating system.
 ## - DETECTED_ARCH:      The detected bit-depth of the host system.
+## - NUM_CORES:			 The detected available processor cores amount.
 ## - GENERATOR:          The detected generator candidate.
 ##
 ## @section script_usage Usage
@@ -61,11 +62,11 @@ find_program(MAKE_PATH mingw32-make)
 
 ## @section generator_selection Generator Selection
 ## @brief                       Chooses the most appropriate build system generator
-##                              Selection priority: Ninja > MinGW Makefiles > System Default
-if(NINJA_PATH)
-    set(GENERATOR "Ninja")
-elseif(CMAKE_HOST_WIN32 AND GCC_PATH AND MAKE_PATH)
+##                              Selection priority: MinGW Makefiles > Ninja > System Default
+if(CMAKE_HOST_WIN32 AND GCC_PATH AND MAKE_PATH)
     set(GENERATOR "MinGW Makefiles")
+else if(NINJA_PATH)
+    set(GENERATOR "Ninja")
 else()
     set(GENERATOR "")
 endif()

@@ -1,34 +1,35 @@
 ################################################################################
-## @file build_and_run_project.cmake
-## @brief Cross-platform CMake build and execution script
-##
-## @details
-## Comprehensive build automation script that configures, compiles, and runs
-## a CMake-based C++ project across multiple platforms (Windows, Linux, macOS).
-## The script automatically detects the host platform, available compilers,
-## and system resources (CPU cores) to optimize the build process.
+## @file    build_and_run_project.cmake
+## @brief   Cross-platform CMake build and execution script
+## @details Comprehensive build automation script that configures, compiles, and runs
+##          a CMake-based C++ project across multiple platforms (Windows, Linux, macOS).
+##          The script automatically inform the host platform, available compilers,
+##          and detect system resources (CPU cores) to optimize the build process.
 ##
 ## @section workflow Workflow
-## -# Detects platform (Windows, Linux, macOS) and CPU architecture
-## -# Counts available CPU cores for parallel compilation
-## -# Automatically selects the best available build generator
-##    - Prefers Ninja for faster builds
-##    - Falls back to MinGW Makefiles on Windows with GCC
-##    - Uses system default generator as final fallback
-## -# Configures the project with CMake (Release build type)
+## -# Calls detect_generator.cmake to get:
+##    - DETECTED_PLATFORM: The string name of the detected operating system.
+##    - DETECTED_ARCH:     The detected bit-depth of the host system.
+##    - NUM_CORES:         The detected available processor cores amount.
+##    - GENERATOR:         The detected generator candidate.
+## -# Configures the project with CMake (Release build only)
 ## -# Builds the project using all available CPU cores in parallel
 ## -# Runs the compiled executable
 ## -# Reports build status and execution results
 ##
 ## @section features Features
-## - **Platform Detection**: Automatically identifies Windows, macOS, or Linux
-## - **Architecture Detection**: Detects system architecture (x86_64, ARM64, etc.)
-## - **Intelligent Generator Selection**: Chooses the best available build system
-## - **Parallel Compilation**: Uses all system CPU cores to maximize build speed
-## - **Error Handling**: Graceful error reporting at each build stage
-## - **Cross-platform Support**: Works seamlessly across different operating systems
-## - **Executable Detection**: Handles platform-specific executable extensions
-## - **Automatic Execution**: Runs compiled binary after successful build
+## - **Cross-platform Support**:   Works seamlessly across different operating systems
+## - **Generator Selection**:      Chooses available build system (more generators may be added)
+## - **Parallel Compilation**:     Uses all system CPU cores to maximize build speed
+## - **Error Handling**:           Graceful error reporting at each build stage
+## - **Automatic Execution Test**: Runs platform-specific compiled binary after successful build
+##
+## @section platforms Supported Platforms & Generators
+## | Platform | Default | Fallback 1      | Fallback 2     |
+## |----------|---------|-----------------|----------------|
+## | Windows  | Ninja   | MinGW Makefiles | System Default |
+## | Linux    | Ninja   | System Default  | -              |
+## | macOS    | Ninja   | System Default  | -              |
 ##
 ## @section usage Usage
 ## @code
@@ -37,15 +38,8 @@
 ##
 ## @section configuration Configuration
 ## Edit the following variables at the beginning of the script to customize:
-## - `EXE_NAME`: Name of the executable to build (default: ichess_runner)
+## - `EXE_NAME`:  Name of the executable to build      (default: ichess_runner)
 ## - `BUILD_DIR`: Output directory for build artifacts (default: build)
-##
-## @section platforms Supported Platforms & Generators
-## | Platform | Preferred Generator | Fallback 1 | Fallback 2 |
-## |----------|-------------------|-----------|-----------|
-## | Windows  | Ninja              | MinGW Makefiles | System Default |
-## | Linux    | Ninja              | Unix Makefiles  | System Default |
-## | macOS    | Ninja              | Xcode           | System Default |
 ##
 ## @section requirements Requirements
 ## - CMake 3.15 or higher
@@ -66,19 +60,19 @@
 
 cmake_minimum_required(VERSION 3.28)
 
-## @var EXE_NAME
-## @brief Name of the executable to build
-## @details Edit this to match your CMakeLists.txt project name
+## @var     EXE_NAME
+## @brief   Name of the executable to build
+## @details This is used as config parameter
 set(EXE_NAME "ichess_runner")
 
-## @var BUILD_DIR
-## @brief Output directory for build artifacts
+## @var     BUILD_DIR
+## @brief   Output directory for build artifacts
 ## @details All build files and the executable will be placed here
 set(BUILD_DIR "build")
 
 ## @section exe_location Executable Path Resolution
-## @brief Constructs the path to the compiled executable
-## Accounts for platform differences: .exe on Windows, bare name on Unix
+## @brief                Constructs the path to the compiled executable
+##                       Accounts for platform differences: .exe on Windows, bare name on Unix
 if(WIN32)
     set(EXE_PATH "${BUILD_DIR}/${EXE_NAME}.exe")
 else()
@@ -147,7 +141,7 @@ message("================================ BUILD PHASE ==========================
 
 ## @brief Validate core count and ensure minimum of 1
 if(NOT NUM_CORES GREATER_EQUAL 1)
-	set(NUM_CORES 1)
+    set(NUM_CORES 1)
 endif()
 
 ## @var   BUILD_COMMAND_ARGS
