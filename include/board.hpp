@@ -1,11 +1,16 @@
-/// @file      board.hpp
-/// @author    Calileus (https://github.com/ObsidianHonorCoders/inheritance-chess)
-/// @brief     Chess board management and console display.
-/// @details   Defines the Board class that manages chess pieces, board state,
-///            and provides console-based visualization.
-/// @version   1.0
-/// @date      2026-01-22
-/// @copyright MIT License - see LICENSE file for details
+/// @file         board.hpp
+/// @brief        Chess board management and console display.
+/// @project      Inheritance Chess
+/// @organization Obsidian Honor Coders
+/// @repository   https://github.com/ObsidianHonorCoders/inheritance-chess
+/// @author       Calileus
+/// @details      Defines the Board class that manages chess pieces, board state,
+///               and provides console-based visualization.
+/// @date         2026-01-22
+/// @copyright    2026 Obsidian Honor Coders
+/// @license      Apache License 2.0 - http://www.apache.org/licenses/LICENSE-2.0
+/// @note         Licensed under the Apache License, Version 2.0 (the "License");
+///               you may not use this file except in compliance with the License.
 
 #ifndef ICHESS_SRC_BOARD
 #define ICHESS_SRC_BOARD

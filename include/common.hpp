@@ -1,11 +1,16 @@
-/// @file      common.hpp
-/// @author    Calileus (https://github.com/ObsidianHonorCoders/inheritance-chess)
-/// @brief     Common types and enumerations for the Chess Engine.
-/// @details   Defines shared enumerations for piece colors, piece types, and position
-///            structures used throughout the inheritance-chess engine.
-/// @version   1.0
-/// @date      2026-01-27
-/// @copyright MIT License - see LICENSE file for details
+/// @file         common.hpp
+/// @brief        Common types and enumerations for the Chess Engine.
+/// @project      Inheritance Chess
+/// @organization Obsidian Honor Coders
+/// @repository   https://github.com/ObsidianHonorCoders/inheritance-chess
+/// @author       Calileus
+/// @details      Defines shared enumerations for piece colors, piece types, and position
+///               structures used throughout the inheritance-chess engine.
+/// @date         2026-01-27
+/// @copyright    2026 Obsidian Honor Coders
+/// @license      Apache License 2.0 - http://www.apache.org/licenses/LICENSE-2.0
+/// @note         Licensed under the Apache License, Version 2.0 (the "License");
+///               you may not use this file except in compliance with the License.
 
 #ifndef ICHESS_SRC_COMMON
 #define ICHESS_SRC_COMMON

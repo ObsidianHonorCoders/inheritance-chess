@@ -1,11 +1,16 @@
-/// @file      king.hpp
-/// @author    Calileus (https://github.com/ObsidianHonorCoders/inheritance-chess)
-/// @brief     King piece implementation for the chess engine.
-/// @details   Defines the King class that inherits from Piece and implements
-///            king-specific movement rules for the chess game.
-/// @version   1.0
-/// @date      2026-02-06
-/// @copyright MIT License - see LICENSE file for details
+/// @file         king.hpp
+/// @brief        King piece implementation for the chess engine.
+/// @project      Inheritance Chess
+/// @organization Obsidian Honor Coders
+/// @repository   https://github.com/ObsidianHonorCoders/inheritance-chess
+/// @author       Calileus
+/// @details      Defines the King class that inherits from Piece and implements
+///               king-specific movement rules for the chess game.
+/// @date         2026-02-06
+/// @copyright    2026 Obsidian Honor Coders
+/// @license      Apache License 2.0 - http://www.apache.org/licenses/LICENSE-2.0
+/// @note         Licensed under the Apache License, Version 2.0 (the "License");
+///               you may not use this file except in compliance with the License.
 
 #ifndef ICHESS_SRC_KING
 #define ICHESS_SRC_KING

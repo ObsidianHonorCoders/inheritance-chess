@@ -1,11 +1,16 @@
-/// @file      bishop.hpp
-/// @author    Calileus (https://github.com/ObsidianHonorCoders/inheritance-chess)
-/// @brief     Bishop piece implementation for the chess engine.
-/// @details   Defines the Bishop class that inherits from Piece and implements
-///            bishop-specific movement rules for the chess game.
-/// @version   1.0
-/// @date      2026-02-06
-/// @copyright MIT License - see LICENSE file for details
+/// @file         bishop.hpp
+/// @brief        Bishop piece implementation for the chess engine.
+/// @project      Inheritance Chess
+/// @organization Obsidian Honor Coders
+/// @repository   https://github.com/ObsidianHonorCoders/inheritance-chess
+/// @author       Calileus
+/// @details      Defines the Bishop class that inherits from Piece and implements
+///               bishop-specific movement rules for the chess game.
+/// @date         2026-02-06
+/// @copyright    2026 Obsidian Honor Coders
+/// @license      Apache License 2.0 - http://www.apache.org/licenses/LICENSE-2.0
+/// @note         Licensed under the Apache License, Version 2.0 (the "License");
+///               you may not use this file except in compliance with the License.
 
 #ifndef ICHESS_SRC_BISHOP
 #define ICHESS_SRC_BISHOP
