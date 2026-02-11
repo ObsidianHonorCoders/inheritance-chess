@@ -1,0 +1,42 @@
+name: integration-test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_target:
+    types: [opened]
+
+jobs:
+
+  build-test-and-run:
+    # Avoid running the build on pull_request_target (security + correctness).
+    if: github.event_name != 'pull_request_target'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: true
+      - name: Build & run via CMake script
+        run: cmake -DBUILD_TESTS=ON -P build_and_run_project.cmake
+
+  welcome:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-message: |
+            🎉 Thanks for your first PR to OHC!
+            - Please assign yourself, add labels, and add a brief comment describing your change.
+            - Link the related issue and project if applicable.
