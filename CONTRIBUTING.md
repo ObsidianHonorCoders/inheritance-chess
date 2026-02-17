@@ -79,35 +79,31 @@ Allowed types:
 
 ## Authorship Header Standardization
 
-All `.cpp` and `.h` files **must include a standardized authorship header** at the top of the file.
+All `.cpp` and `.hpp` files **must include a standardized authorship header** at the top of the file.
 
-### Required Header Template for .h Files
+### Required Header Template for .hpp Files
 
 ```cpp
-/// @file         [Filename]
-/// @brief        [Short description of the file's purpose, no more than one line sentence]
-/// @project      Inheritance Chess 
-/// @organization Obsidian Honor Coders
-/// @repository   https://github.com/ObsidianHonorCoders/inheritance-chess
-/// @author       [Original Author Name/GitHub Handler]
-/// @details      [Multiple line description.
-///               Of the file functionality.]
-/// @date         [Creation date]
-/// @copyright    MIT License - see LICENSE file for details
+/// @file      [Filename]
+/// @brief     [Short description of the file's purpose, no more than one line sentence]
+/// @author    [Original Author Name/GitHub Handler]
+/// @date      [Creation date YYYY-MM-DD]
+/// @copyright 2026 Obsidian Honor Coders. Licensed under Apache 2.0.
+/// @see       https://github.com/ObsidianHonorCoders/inheritance-chess
+/// @details   [Multiple line description.
+///            Of the file functionality.]
 ```
 
 ### Required Header Template for .cpp Files
 
 ```cpp
-/// @file         [Filename]
-/// @brief        [Short description of the file's purpose, no more than one line sentence]
-/// @project      Inheritance Chess 
-/// @organization Obsidian Honor Coders
-/// @author       [Original Author Name/GitHub Handler]
-/// @details      [Multiple line description.
-///               Of the file functionality.]
-/// @date         [Creation date]
-/// @copyright    MIT License - see LICENSE file for details
+/// @file      [Filename]
+/// @brief     [Short description of the file's purpose, no more than one line sentence]
+/// @author    [Original Author Name/GitHub Handler]
+/// @date      [Creation date YYYY-MM-DD]
+/// @copyright 2026 Obsidian Honor Coders. Licensed under Apache 2.0.
+/// @details   [Multiple line description.
+///            Of the file functionality.]
 ```
 
 ### Rules
