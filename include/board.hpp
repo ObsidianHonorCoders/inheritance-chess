@@ -70,8 +70,8 @@ class Board
     void display() const;
 
   private:
-    PieceList pieces = {}; ///< Collection of pieces currently on the board
-    BoardGrid grid   = {}; ///< 8x8 character grid for display
+    Piece::List pieces = {}; ///< Collection of pieces currently on the board
+    BoardGrid   grid   = {}; ///< 8x8 character grid for display
 };
 
 #endif // ICHESS_SRC_BOARD

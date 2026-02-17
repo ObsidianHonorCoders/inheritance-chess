@@ -15,14 +15,4 @@
 #ifndef ICHESS_SRC_COMMON
 #define ICHESS_SRC_COMMON
 
-/// @struct  PiecePosition
-/// @brief   Represents a position on the chess board.
-/// @details Uses algebraic notation where file (column) ranges from 'a' to 'h'
-///          and rank (row) ranges from '1' to '8'.
-struct PiecePosition
-{
-    char file; ///< File (column) coordinate, 'a' through 'h'
-    char rank; ///< Rank (row) coordinate, '1' through '8'
-};
-
 #endif // ICHESS_SRC_COMMON
