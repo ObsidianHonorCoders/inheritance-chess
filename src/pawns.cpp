@@ -41,6 +41,8 @@ void Pawn::moves(std::vector<PiecePosition>& p, const PieceList other) const
 /// @throws     std::runtime_error if the piece has an invalid color.
 /// @note       Implementation distinguishes between white and black pawns for directional movement.
 /// @details    This overload provides piece positions and colors separately for move calculation.
-void Pawn::moves(std::vector<PiecePosition>& p, const std::vector<PiecePosition> other_p, const std::vector<PieceColor> other_c) const
+void Pawn::moves(std::vector<PiecePosition>&      p,
+                 const std::vector<PiecePosition> other_p,
+                 const std::vector<Piece::Color>  other_c) const
 {
 }

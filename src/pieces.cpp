@@ -21,15 +21,15 @@ Piece::Piece() {}
 
 /// @brief   Construct a Piece with specified color and type.
 /// @details Initializes the piece with the given color and type, and sets position to empty.
-Piece::Piece(PieceColor col, PieceType typ) : color(col), type(typ) { set_position(' ', ' '); }
+Piece::Piece(Piece::Color col, PieceType typ) : color(col), type(typ) { set_position(' ', ' '); }
 
 /// @brief  Check if this piece is black.
 /// @return True if the piece color is BLACK.
-const bool Piece::is_black() const { return color == PieceColor::BLACK; }
+const bool Piece::is_black() const { return color == Piece::Color::BLACK; }
 
 /// @brief  Check if this piece is white.
 /// @return True if the piece color is WHITE.
-const bool Piece::is_white() const { return color == PieceColor::WHITE; }
+const bool Piece::is_white() const { return color == Piece::Color::WHITE; }
 
 /// @brief   Set the position of the piece on the board (file: 'a'-'h', rank: '1'-'8').
 /// @details Validates coordinates and sets them if valid (file: a-h, rank: 1-8).
@@ -69,11 +69,11 @@ void Piece::get_position(char& f, char& r)
 const char Piece::get_representation() const
 {
   char res = ' ';
-  if (color == PieceColor::WHITE)
+  if (color == Piece::Color::WHITE)
   {
     res = static_cast<char>(type);
   }
-  else if (color == PieceColor::BLACK)
+  else if (color == Piece::Color::BLACK)
   {
     res = static_cast<char>(std::tolower(static_cast<char>(type)));
   }

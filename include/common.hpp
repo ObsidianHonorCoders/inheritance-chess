@@ -15,16 +15,6 @@
 #ifndef ICHESS_SRC_COMMON
 #define ICHESS_SRC_COMMON
 
-/// @enum    PieceColor
-/// @brief   Represents the color of a chess piece.
-/// @details Each chess piece belongs to either the white or black side, or no side (NONE).
-enum class PieceColor : char
-{
-  NONE  = ' ', ///< No color assigned
-  WHITE = 'w', ///< White piece
-  BLACK = 'b'  ///< Black piece
-};
-
 /// @enum    PieceType
 /// @brief   Represents the type of chess piece.
 /// @details Enumerates all standard chess piece types, each with a unique character representation.

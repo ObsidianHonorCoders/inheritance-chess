@@ -28,7 +28,7 @@ class Knight : public Piece
     /// @param file The file (column) coordinate ('a' to 'h').
     /// @param rank The rank (row) coordinate ('1' to '8').
     /// @param color The color of the knight (WHITE or BLACK).
-    Knight(char file, char rank, PieceColor color) : Piece(color, PieceType::KNIGHT) { set_position(file, rank); }
+    Knight(char file, char rank, Piece::Color color) : Piece(color, PieceType::KNIGHT) { set_position(file, rank); }
 
     /// @brief Virtual destructor for proper cleanup.
     virtual ~Knight() override {};
@@ -49,7 +49,7 @@ class Knight : public Piece
     /// @details    This overload provides piece positions and colors separately for move calculation.
     virtual void moves(std::vector<PiecePosition>&      p,
                        const std::vector<PiecePosition> other_p,
-                       const std::vector<PieceColor>    other_c) const override;
+                       const std::vector<Piece::Color>  other_c) const override;
 };
 
 #endif // ICHESS_SRC_KNIGHT

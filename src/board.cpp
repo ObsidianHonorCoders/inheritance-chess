@@ -85,25 +85,25 @@ void Board::initializeStandardSetup()
   clearGrid();
   for (int i = 0; i < BOARD_SIZE; i++)
   {
-    addPiece(new Pawn('a' + i, '2', PieceColor::WHITE));
-    addPiece(new Pawn('a' + i, '7', PieceColor::BLACK));
+    addPiece(new Pawn('a' + i, '2', Piece::Color::WHITE));
+    addPiece(new Pawn('a' + i, '7', Piece::Color::BLACK));
   }
-  addPiece(new Rook('a', '1', PieceColor::WHITE));
-  addPiece(new Rook('h', '1', PieceColor::WHITE));
-  addPiece(new Rook('a', '8', PieceColor::BLACK));
-  addPiece(new Rook('h', '8', PieceColor::BLACK));
-  addPiece(new Knight('b', '1', PieceColor::WHITE));
-  addPiece(new Knight('g', '1', PieceColor::WHITE));
-  addPiece(new Knight('b', '8', PieceColor::BLACK));
-  addPiece(new Knight('g', '8', PieceColor::BLACK));
-  addPiece(new Bishop('c', '1', PieceColor::WHITE));
-  addPiece(new Bishop('f', '1', PieceColor::WHITE));
-  addPiece(new Bishop('c', '8', PieceColor::BLACK));
-  addPiece(new Bishop('f', '8', PieceColor::BLACK));
-  addPiece(new Queen('d', '1', PieceColor::WHITE));
-  addPiece(new Queen('d', '8', PieceColor::BLACK));
-  addPiece(new King('e', '1', PieceColor::WHITE));
-  addPiece(new King('e', '8', PieceColor::BLACK));
+  addPiece(new Rook('a', '1', Piece::Color::WHITE));
+  addPiece(new Rook('h', '1', Piece::Color::WHITE));
+  addPiece(new Rook('a', '8', Piece::Color::BLACK));
+  addPiece(new Rook('h', '8', Piece::Color::BLACK));
+  addPiece(new Knight('b', '1', Piece::Color::WHITE));
+  addPiece(new Knight('g', '1', Piece::Color::WHITE));
+  addPiece(new Knight('b', '8', Piece::Color::BLACK));
+  addPiece(new Knight('g', '8', Piece::Color::BLACK));
+  addPiece(new Bishop('c', '1', Piece::Color::WHITE));
+  addPiece(new Bishop('f', '1', Piece::Color::WHITE));
+  addPiece(new Bishop('c', '8', Piece::Color::BLACK));
+  addPiece(new Bishop('f', '8', Piece::Color::BLACK));
+  addPiece(new Queen('d', '1', Piece::Color::WHITE));
+  addPiece(new Queen('d', '8', Piece::Color::BLACK));
+  addPiece(new King('e', '1', Piece::Color::WHITE));
+  addPiece(new King('e', '8', Piece::Color::BLACK));
   updateGrid();
 }
 

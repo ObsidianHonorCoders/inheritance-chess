@@ -27,8 +27,19 @@
 ///          the moves() method to define piece-specific movement rules.
 class Piece
 {
+  public:
+    /// @enum    Piece::Color
+    /// @brief   Represents the color of a chess piece.
+    /// @details Each chess piece belongs to either the white or black side, or no side (NONE).
+    enum class Color : char
+    {
+      NONE  = ' ', ///< No color assigned
+      WHITE = 'w', ///< White piece
+      BLACK = 'b'  ///< Black piece
+    };
+
   private:
-    PieceColor    color;    ///< Color of the piece (white, black, or none)
+    Piece::Color  color;    ///< Color of the piece (white, black, or none)
     PiecePosition position; ///< Current position of the piece on the board
     PieceType     type;     ///< Type of the piece (pawn, knight, bishop, etc.)
 
@@ -40,7 +51,7 @@ class Piece
     /// @brief Construct a Piece with specified color and type.
     /// @param col The color of the piece (WHITE or BLACK).
     /// @param typ The type of the piece (PAWN, KNIGHT, BISHOP, ROOK, QUEEN, or KING).
-    Piece(PieceColor col, PieceType typ);
+    Piece(Piece::Color col, PieceType typ);
 
     /// @brief  Checks if the piece is black.
     /// @return True if the piece color is BLACK, false otherwise.
@@ -82,7 +93,7 @@ class Piece
     /// @details    This overload provides piece positions and colors separately, allowing independent
     ///             validation of piece positions and ownership for move calculation.
     virtual void
-    moves(std::vector<PiecePosition>& p, const std::vector<PiecePosition> other_p, const std::vector<PieceColor> other_c) const = 0;
+    moves(std::vector<PiecePosition>& p, const std::vector<PiecePosition> other_p, const std::vector<Piece::Color> other_c) const = 0;
 };
 
 /// @brief A list of pointers to chess pieces.
