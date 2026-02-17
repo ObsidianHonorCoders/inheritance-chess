@@ -28,7 +28,7 @@ class Bishop : public Piece
     /// @param file The file (column) coordinate ('a' to 'h').
     /// @param rank The rank (row) coordinate ('1' to '8').
     /// @param color The color of the bishop (WHITE or BLACK).
-    Bishop(char file, char rank, Piece::Color color) : Piece(color, PieceType::BISHOP) { set_position(file, rank); }
+    Bishop(char file, char rank, Piece::Color color) : Piece(color, Piece::Type::BISHOP) { set_position(file, rank); }
 
     /// @brief Virtual destructor for proper cleanup.
     virtual ~Bishop() override {};

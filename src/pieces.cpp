@@ -21,7 +21,7 @@ Piece::Piece() {}
 
 /// @brief   Construct a Piece with specified color and type.
 /// @details Initializes the piece with the given color and type, and sets position to empty.
-Piece::Piece(Piece::Color col, PieceType typ) : color(col), type(typ) { set_position(' ', ' '); }
+Piece::Piece(Piece::Color col, Piece::Type typ) : color(col), type(typ) { set_position(' ', ' '); }
 
 /// @brief  Check if this piece is black.
 /// @return True if the piece color is BLACK.

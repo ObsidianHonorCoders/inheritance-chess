@@ -28,7 +28,7 @@ class Rook : public Piece
     /// @param file The file (column) coordinate ('a' to 'h').
     /// @param rank The rank (row) coordinate ('1' to '8').
     /// @param color The color of the rook (WHITE or BLACK).
-    Rook(char file, char rank, Piece::Color color) : Piece(color, PieceType::ROOK) { set_position(file, rank); }
+    Rook(char file, char rank, Piece::Color color) : Piece(color, Piece::Type::ROOK) { set_position(file, rank); }
 
     /// @brief Virtual destructor for proper cleanup.
     virtual ~Rook() override {};

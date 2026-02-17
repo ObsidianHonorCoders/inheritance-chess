@@ -15,20 +15,6 @@
 #ifndef ICHESS_SRC_COMMON
 #define ICHESS_SRC_COMMON
 
-/// @enum    PieceType
-/// @brief   Represents the type of chess piece.
-/// @details Enumerates all standard chess piece types, each with a unique character representation.
-enum class PieceType : char
-{
-  NONE   = ' ', ///< No piece type
-  PAWN   = 'P', ///< Pawn piece
-  KNIGHT = 'N', ///< Knight piece
-  BISHOP = 'B', ///< Bishop piece
-  ROOK   = 'R', ///< Rook piece
-  QUEEN  = 'Q', ///< Queen piece
-  KING   = 'K'  ///< King piece
-};
-
 /// @struct  PiecePosition
 /// @brief   Represents a position on the chess board.
 /// @details Uses algebraic notation where file (column) ranges from 'a' to 'h'

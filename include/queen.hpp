@@ -28,7 +28,7 @@ class Queen : public Piece
     /// @param file The file (column) coordinate ('a' to 'h').
     /// @param rank The rank (row) coordinate ('1' to '8').
     /// @param color The color of the queen (WHITE or BLACK).
-    Queen(char file, char rank, Piece::Color color) : Piece(color, PieceType::QUEEN) { set_position(file, rank); }
+    Queen(char file, char rank, Piece::Color color) : Piece(color, Piece::Type::QUEEN) { set_position(file, rank); }
 
     /// @brief Virtual destructor for proper cleanup.
     virtual ~Queen() override {};

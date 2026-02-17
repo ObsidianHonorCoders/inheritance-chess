@@ -38,10 +38,25 @@ class Piece
       BLACK = 'b'  ///< Black piece
     };
 
+    /// @enum    Piece::Type
+    /// @brief   Represents the type of chess piece.
+    /// @details Enumerates all standard chess piece types, each with a unique character representation.
+    enum class Type : char
+    {
+      NONE   = ' ', ///< No piece type
+      PAWN   = 'P', ///< Pawn piece
+      KNIGHT = 'N', ///< Knight piece
+      BISHOP = 'B', ///< Bishop piece
+      ROOK   = 'R', ///< Rook piece
+      QUEEN  = 'Q', ///< Queen piece
+      KING   = 'K'  ///< King piece
+    };
+
+
   private:
     Piece::Color  color;    ///< Color of the piece (white, black, or none)
     PiecePosition position; ///< Current position of the piece on the board
-    PieceType     type;     ///< Type of the piece (pawn, knight, bishop, etc.)
+    Piece::Type   type;     ///< Type of the piece (pawn, knight, bishop, etc.)
 
     /// @brief   Private default constructor.
     /// @details Prevents instantiation of Piece without a color and type.
@@ -51,7 +66,7 @@ class Piece
     /// @brief Construct a Piece with specified color and type.
     /// @param col The color of the piece (WHITE or BLACK).
     /// @param typ The type of the piece (PAWN, KNIGHT, BISHOP, ROOK, QUEEN, or KING).
-    Piece(Piece::Color col, PieceType typ);
+    Piece(Piece::Color col, Piece::Type typ);
 
     /// @brief  Checks if the piece is black.
     /// @return True if the piece color is BLACK, false otherwise.

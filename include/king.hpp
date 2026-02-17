@@ -28,7 +28,7 @@ class King : public Piece
     /// @param file The file (column) coordinate ('a' to 'h').
     /// @param rank The rank (row) coordinate ('1' to '8').
     /// @param color The color of the king (WHITE or BLACK).
-    King(char file, char rank, Piece::Color color) : Piece(color, PieceType::KING) { set_position(file, rank); }
+    King(char file, char rank, Piece::Color color) : Piece(color, Piece::Type::KING) { set_position(file, rank); }
 
     /// @brief Virtual destructor for proper cleanup.
     virtual ~King() override {};

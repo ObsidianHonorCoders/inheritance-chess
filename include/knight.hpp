@@ -28,7 +28,7 @@ class Knight : public Piece
     /// @param file The file (column) coordinate ('a' to 'h').
     /// @param rank The rank (row) coordinate ('1' to '8').
     /// @param color The color of the knight (WHITE or BLACK).
-    Knight(char file, char rank, Piece::Color color) : Piece(color, PieceType::KNIGHT) { set_position(file, rank); }
+    Knight(char file, char rank, Piece::Color color) : Piece(color, Piece::Type::KNIGHT) { set_position(file, rank); }
 
     /// @brief Virtual destructor for proper cleanup.
     virtual ~Knight() override {};
