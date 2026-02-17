@@ -14,10 +14,6 @@
 #include <iostream>
 #include "rook.hpp"
 
-void Rook::moves(std::vector<Piece::Position>& p, const Piece::List other) const {}
+void Rook::moves(Piece::PositionList& p, const Piece::List other) const {}
 
-void Rook::moves(std::vector<Piece::Position>&      p,
-                 const std::vector<Piece::Position> other_p,
-                 const std::vector<Piece::Color>    other_c) const
-{
-}
+void Rook::moves(Piece::PositionList& p, const Piece::PositionList other_p, const std::vector<Piece::Color> other_c) const {}

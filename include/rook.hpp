@@ -38,7 +38,7 @@ class Rook : public Piece
     /// @param[in]  other Vector of pointers to all other pieces on the board for move validation.
     /// @throws     std::runtime_error if the piece has an invalid color.
     /// @note       Rooks move horizontally and vertically without restriction.
-    virtual void moves(std::vector<Piece::Position>& p, const Piece::List other) const override;
+    virtual void moves(Piece::PositionList& p, const Piece::List other) const override;
 
     /// @brief      Calculate valid moves for this rook.
     /// @param[out] p        Vector to be filled with valid move positions.
@@ -47,9 +47,8 @@ class Rook : public Piece
     /// @throws     std::runtime_error if the piece has an invalid color.
     /// @note       Rooks move horizontally and vertically without restriction.
     /// @details    This overload provides piece positions and colors separately for move calculation.
-    virtual void moves(std::vector<Piece::Position>&      p,
-                       const std::vector<Piece::Position> other_p,
-                       const std::vector<Piece::Color>    other_c) const override;
+    virtual void
+    moves(Piece::PositionList& p, const Piece::PositionList other_p, const std::vector<Piece::Color> other_c) const override;
 };
 
 #endif // ICHESS_SRC_ROOK

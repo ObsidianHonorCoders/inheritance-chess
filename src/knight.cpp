@@ -14,10 +14,6 @@
 #include <iostream>
 #include "knight.hpp"
 
-void Knight::moves(std::vector<Piece::Position>& p, const Piece::List other) const {}
+void Knight::moves(Piece::PositionList& p, const Piece::List other) const {}
 
-void Knight::moves(std::vector<Piece::Position>&      p,
-                   const std::vector<Piece::Position> other_p,
-                   const std::vector<Piece::Color>    other_c) const
-{
-}
+void Knight::moves(Piece::PositionList& p, const Piece::PositionList other_p, const std::vector<Piece::Color> other_c) const {}
