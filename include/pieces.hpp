@@ -68,7 +68,13 @@ class Piece
     ///        or managed by the Board class to avoid memory leaks.
     using List = std::vector<Piece*>;
 
+    /// @class Piece::PositionList
+    /// @brief A vector of chess pieces positions.
     using PositionList = std::vector<Piece::Position>;
+
+    /// @class Piece::ColorList
+    /// @brief A vector of chess pieces colors.
+    using ColorList = std::vector<Piece::Color>;
 
   private:
     Piece::Color    color;    ///< Color of the piece (white, black, or none)
@@ -115,7 +121,7 @@ class Piece
     /// @param[out] p     Vector to be filled with valid move positions.
     /// @param[in]  other Vector of pointers to all other pieces on the board for move validation.
     /// @note       Must be implemented by derived classes for their specific movement rules.
-    virtual void moves(Piece::PositionList& p, const Piece::List other) const = 0;
+    virtual void moves(PositionList& p, const List other) const = 0;
 
     /// @brief      Pure virtual method to calculate valid moves for the piece.
     /// @param[out] p       Vector to be filled with valid move positions.
@@ -124,7 +130,7 @@ class Piece
     /// @note       Must be implemented by derived classes for their specific movement rules.
     /// @details    This overload provides piece positions and colors separately, allowing independent
     ///             validation of piece positions and ownership for move calculation.
-    virtual void moves(Piece::PositionList& p, const Piece::PositionList other_p, const std::vector<Piece::Color> other_c) const = 0;
+    virtual void moves(PositionList& p, const PositionList other_p, const ColorList other_c) const = 0;
 };
 
 /// @brief  Helper function to safely get the character representation of a piece pointer.

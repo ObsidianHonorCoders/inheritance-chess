@@ -47,8 +47,7 @@ class Bishop : public Piece
     /// @throws     std::runtime_error if the piece has an invalid color.
     /// @note       Bishops move diagonally without restriction.
     /// @details    This overload provides piece positions and colors separately for move calculation.
-    virtual void
-    moves(Piece::PositionList& p, const Piece::PositionList other_p, const std::vector<Piece::Color> other_c) const override;
+    virtual void moves(Piece::PositionList& p, const Piece::PositionList other_p, const Piece::ColorList other_c) const override;
 };
 
 #endif // ICHESS_SRC_BISHOP

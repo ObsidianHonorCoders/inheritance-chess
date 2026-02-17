@@ -16,4 +16,4 @@
 
 void Bishop::moves(Piece::PositionList& p, const Piece::List other) const {}
 
-void Bishop::moves(Piece::PositionList& p, const Piece::PositionList other_p, const std::vector<Piece::Color> other_c) const {}
+void Bishop::moves(Piece::PositionList& p, const Piece::PositionList other_p, const Piece::ColorList other_c) const {}
