@@ -16,6 +16,7 @@
 #define ICHESS_SRC_PIEZAS
 
 #include <vector>
+#include <memory>
 #include <stdexcept>
 
 #include "common.hpp"
@@ -63,10 +64,10 @@ class Piece
     };
 
     /// @class Piece::List
-    /// @brief A vector of pointers to chess pieces.
-    /// @note  This container does NOT own the memory. Objects must be manually deleted
-    ///        or managed by the Board class to avoid memory leaks.
-    using List = std::vector<Piece*>;
+    /// @brief A vector of unique pointers to chess pieces.
+    /// @note  This container owns the memory. Objects are automatically managed
+    ///        by smart pointers to prevent memory leaks.
+    using List = std::vector<std::unique_ptr<Piece>>;
 
     /// @class Piece::PositionList
     /// @brief A vector of chess pieces positions.
@@ -119,9 +120,9 @@ class Piece
 
     /// @brief      Pure virtual method to calculate valid moves for the piece.
     /// @param[out] p     Vector to be filled with valid move positions.
-    /// @param[in]  other Vector of pointers to all other pieces on the board for move validation.
+    /// @param[in]  other Vector of unique pointers to all other pieces on the board for move validation.
     /// @note       Must be implemented by derived classes for their specific movement rules.
-    virtual void moves(PositionList& p, const List other) const = 0;
+    virtual void moves(PositionList& p, const List& other) const = 0;
 
     /// @brief      Pure virtual method to calculate valid moves for the piece.
     /// @param[out] p       Vector to be filled with valid move positions.
@@ -134,8 +135,8 @@ class Piece
 };
 
 /// @brief  Helper function to safely get the character representation of a piece pointer.
-/// @param  p Pointer to a Piece object (may be null).
+/// @param  p Raw pointer to a Piece object (may be null).
 /// @return Character representation of the piece, or space ' ' if pointer is null.
-inline const char getchar(Piece* p) { return (p ? p->get_representation() : ' '); }
+inline const char getchar(const Piece* p) { return (p ? p->get_representation() : ' '); }
 
 #endif // ICHESS_SRC_PIEZAS

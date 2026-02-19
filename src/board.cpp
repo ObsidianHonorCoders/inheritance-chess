@@ -46,7 +46,7 @@ void Board::clearGrid()
 void Board::updateGrid()
 {
   char f = ' ', r = ' ';
-  for (Piece* p : pieces)
+  for (const std::unique_ptr<Piece>& p : pieces)
   {
     if (p)
     {
@@ -57,53 +57,44 @@ void Board::updateGrid()
 }
 
 /// @brief   Remove and delete all pieces from the board.
-/// @details Iterates through the pieces container in reverse order, deletes each piece,
-///          and removes it from the vector to prevent memory leaks.
+/// @details Smart pointers automatically clean up memory when vector is cleared.
 void Board::cleanPieces()
 {
-  for (size_t i = pieces.size(); i > 0; i--)
-  {
-    if (pieces[i - 1])
-    {
-      delete pieces[i - 1];
-      pieces[i - 1] = NULL;
-    }
-    pieces.pop_back();
-  }
+  pieces.clear();
 }
 
 /// @brief   Add a piece to the board.
-/// @param   piece Pointer to the Piece object to add. Deletion is managed by Borad class.
+/// @param   piece Unique pointer to the Piece object to add. Ownership is transferred to Board class.
 /// @details The board takes ownership of the piece and will manage its lifetime.
-void Board::addPiece(Piece* piece) { pieces.push_back(piece); }
+void Board::addPiece(std::unique_ptr<Piece> piece) { pieces.push_back(std::move(piece)); }
 
 /// @brief   Initialize the board with standard chess starting position.
-/// @details Creates white pices on rank 1 and 2 and black pieces on rank 7 and 8.
+/// @details Creates white pieces on rank 1 and 2 and black pieces on rank 7 and 8.
 ///          Updates the grid representation after placing pieces.
 void Board::initializeStandardSetup()
 {
   clearGrid();
   for (int i = 0; i < BOARD_SIZE; i++)
   {
-    addPiece(new Pawn('a' + i, '2', Piece::Color::WHITE));
-    addPiece(new Pawn('a' + i, '7', Piece::Color::BLACK));
+    addPiece(std::make_unique<Pawn>('a' + i, '2', Piece::Color::WHITE));
+    addPiece(std::make_unique<Pawn>('a' + i, '7', Piece::Color::BLACK));
   }
-  addPiece(new Rook('a', '1', Piece::Color::WHITE));
-  addPiece(new Rook('h', '1', Piece::Color::WHITE));
-  addPiece(new Rook('a', '8', Piece::Color::BLACK));
-  addPiece(new Rook('h', '8', Piece::Color::BLACK));
-  addPiece(new Knight('b', '1', Piece::Color::WHITE));
-  addPiece(new Knight('g', '1', Piece::Color::WHITE));
-  addPiece(new Knight('b', '8', Piece::Color::BLACK));
-  addPiece(new Knight('g', '8', Piece::Color::BLACK));
-  addPiece(new Bishop('c', '1', Piece::Color::WHITE));
-  addPiece(new Bishop('f', '1', Piece::Color::WHITE));
-  addPiece(new Bishop('c', '8', Piece::Color::BLACK));
-  addPiece(new Bishop('f', '8', Piece::Color::BLACK));
-  addPiece(new Queen('d', '1', Piece::Color::WHITE));
-  addPiece(new Queen('d', '8', Piece::Color::BLACK));
-  addPiece(new King('e', '1', Piece::Color::WHITE));
-  addPiece(new King('e', '8', Piece::Color::BLACK));
+  addPiece(std::make_unique<Rook>('a', '1', Piece::Color::WHITE));
+  addPiece(std::make_unique<Rook>('h', '1', Piece::Color::WHITE));
+  addPiece(std::make_unique<Rook>('a', '8', Piece::Color::BLACK));
+  addPiece(std::make_unique<Rook>('h', '8', Piece::Color::BLACK));
+  addPiece(std::make_unique<Knight>('b', '1', Piece::Color::WHITE));
+  addPiece(std::make_unique<Knight>('g', '1', Piece::Color::WHITE));
+  addPiece(std::make_unique<Knight>('b', '8', Piece::Color::BLACK));
+  addPiece(std::make_unique<Knight>('g', '8', Piece::Color::BLACK));
+  addPiece(std::make_unique<Bishop>('c', '1', Piece::Color::WHITE));
+  addPiece(std::make_unique<Bishop>('f', '1', Piece::Color::WHITE));
+  addPiece(std::make_unique<Bishop>('c', '8', Piece::Color::BLACK));
+  addPiece(std::make_unique<Bishop>('f', '8', Piece::Color::BLACK));
+  addPiece(std::make_unique<Queen>('d', '1', Piece::Color::WHITE));
+  addPiece(std::make_unique<Queen>('d', '8', Piece::Color::BLACK));
+  addPiece(std::make_unique<King>('e', '1', Piece::Color::WHITE));
+  addPiece(std::make_unique<King>('e', '8', Piece::Color::BLACK));
   updateGrid();
 }
 

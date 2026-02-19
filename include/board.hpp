@@ -17,6 +17,7 @@
 
 #include <array>
 #include <iostream>
+#include <memory>
 
 #include "common.hpp"
 #include "pieces.hpp"
@@ -41,7 +42,7 @@ class Board
     Board();
 
     /// @brief   Destruct the Board.
-    /// @details Cleans up all pieces and frees allocated memory.
+    /// @details Smart pointers automatically clean up all pieces.
     ~Board();
 
     /// @brief   Clear all pieces from the grid.
@@ -53,12 +54,12 @@ class Board
     void updateGrid();
 
     /// @brief   Delete all pieces and clear the pieces container.
-    /// @details Frees memory for all dynamically allocated pieces.
+    /// @details Smart pointers automatically clean up memory.
     void cleanPieces();
 
     /// @brief Add a piece to the board.
-    /// @note  The board takes ownership of the piece pointer.
-    void addPiece(Piece* piece);
+    /// @note  The board takes ownership of the piece unique pointer.
+    void addPiece(std::unique_ptr<Piece> piece);
 
     /// @brief   Initialize the board with standard chess starting position.
     /// @details Sets up all pawns in their starting positions for a new game.

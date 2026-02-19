@@ -35,10 +35,10 @@ class Bishop : public Piece
 
     /// @brief      Calculate valid moves for this bishop.
     /// @param[out] p     Vector to be filled with valid move positions.
-    /// @param[in]  other Vector of pointers to all other pieces on the board for move validation.
+    /// @param[in]  other Vector of unique pointers to all other pieces on the board for move validation.
     /// @throws     std::runtime_error if the piece has an invalid color.
     /// @note       Bishops move diagonally without restriction.
-    virtual void moves(Piece::PositionList& p, const Piece::List other) const override;
+    virtual void moves(Piece::PositionList& p, const Piece::List& other) const override;
 
     /// @brief      Calculate valid moves for this bishop.
     /// @param[out] p        Vector to be filled with valid move positions.

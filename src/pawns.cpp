@@ -20,7 +20,7 @@
 /// @param[in]  other Vector of pointers to all other pieces on the board for move validation.
 /// @throws     std::runtime_error if the piece has an invalid color.
 /// @note       Implementation distinguishes between white and black pawns for directional movement.
-void Pawn::moves(Piece::PositionList& p, const Piece::List other) const
+void Pawn::moves(Piece::PositionList& p, const Piece::List& other) const
 {
   if (is_black())
   {

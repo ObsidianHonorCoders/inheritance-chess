@@ -35,10 +35,10 @@ class Knight : public Piece
 
     /// @brief      Calculate valid moves for this knight.
     /// @param[out] p     Vector to be filled with valid move positions.
-    /// @param[in]  other Vector of pointers to all other pieces on the board for move validation.
+    /// @param[in]  other Vector of unique pointers to all other pieces on the board for move validation.
     /// @throws     std::runtime_error if the piece has an invalid color.
     /// @note       Knights move in an L-shape pattern, regardless of other pieces on the board.
-    virtual void moves(Piece::PositionList& p, const Piece::List other) const override;
+    virtual void moves(Piece::PositionList& p, const Piece::List& other) const override;
 
     /// @brief      Calculate valid moves for this knight.
     /// @param[out] p        Vector to be filled with valid move positions.
