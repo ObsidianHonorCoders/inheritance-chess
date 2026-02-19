@@ -131,7 +131,7 @@ class Piece
     /// @note       Must be implemented by derived classes for their specific movement rules.
     /// @details    This overload provides piece positions and colors separately, allowing independent
     ///             validation of piece positions and ownership for move calculation.
-    virtual void moves(PositionList& p, const PositionList other_p, const ColorList other_c) const = 0;
+    virtual void moves(PositionList& p, const PositionList& other_p, const ColorList& other_c) const = 0;
 };
 
 /// @brief  Helper function to safely get the character representation of a piece pointer.
