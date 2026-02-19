@@ -108,7 +108,13 @@ docs: update contributing guidelines
   - Classes: `PascalCase`
   - Functions: `camelCase`
   - Variables: `camelCase`
-  - Constants: `UPPER_SNAKE_CASE`
+| Entity          | Java / TS / JS | Python      | C / C++     | CMake                |
+|-----------------|----------------|-------------|-------------|----------------------|
+| Types (Classes) | PascalCase     | PascalCase  | PascalCase  | PascalCase (Targets) |
+| Functions       | camelCase      | snake_case  | PascalCase  | snake_case           |
+| Variables       | camelCase      | snake_case  | snake_case  | snake_case (Local)   |
+| Constants       | UPPER_SNAKE    | UPPER_SNAKE | kPascalCase | UPPER_SNAKE (Global) |
+| Macros          | N/A            | N/A         | UPPER_SNAKE | N/A                  |
 - Headers:
   ```cpp
   #pragma once
