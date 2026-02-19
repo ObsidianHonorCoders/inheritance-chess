@@ -68,6 +68,11 @@ set(EXE_NAME "ichess_runner")
 ## @details All build files and the executable will be placed here
 set(BUILD_DIR "build")
 
+## @var     BUILD_TESTS
+## @brief   Option to build and run tests
+## @details Set to ON to build and run tests
+option(BUILD_TESTS "Build and run tests" ON)
+
 ## @section exe_location Executable Path Resolution
 ## @brief                Constructs the path to the compiled executable
 ##                       Accounts for platform differences: .exe on Windows, bare name on Unix
@@ -98,6 +103,7 @@ include(cmakehelpers/detect_generator.cmake)
 message(STATUS "Build Type:    ${CMAKE_BUILD_TYPE}")
 message(STATUS "Build Dir:     ${BUILD_DIR}/")
 message(STATUS "Executable:    ${EXE_PATH}")
+message("")
 message("======= CMake Configuration Phase =============================================")
 
 ## @var   CONF_ARGS
@@ -130,6 +136,7 @@ message(STATUS "Configuration completed successfully")
 ## @section build_exec Build with Parallel Compilation
 ## @brief              Compiles the project using all detected CPU cores
 ##                     The --parallel flag is critical for utilizing multi-core systems
+message("")
 message("======= CMake Parallel Build Phase ============================================")
 
 ## @brief Validate core count and ensure minimum of 1
@@ -152,8 +159,23 @@ if(NOT BUILD_RESULT EQUAL 0)
 endif()
 message(STATUS "Build completed successfully using all ${NUM_CORES} CPU cores")
 
+## @section test_exec Test Executable Location and Verification
+## @brief             Verify expected executable location and run it
+message("")
+message("======= Google Testing Suit Running Phase =====================================")
+if(BUILD_TESTS)
+    message("Starting tests...")
+    execute_process( COMMAND ${BUILD_DIR}/tests/test_${EXE_NAME} RESULT_VARIABLE TEST_RESULT )
+    if(NOT TEST_RESULT EQUAL 0)
+        message(WARNING "Tests failed!")
+    endif()
+else()
+    message("Tests disabled, skipping test execution...")
+endif()
+
 ## @section bin_exec Executable Location and Verification
 ## @brief            Verify expected executable location and run it
+message("")
 message("======= Binary Executable Running Phase =======================================")
 message(STATUS "Looking for executable at: ${EXE_PATH}")
 

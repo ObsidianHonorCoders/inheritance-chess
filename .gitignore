@@ -42,6 +42,7 @@
 
 # Build folders
 build/
+build_gtest/
 bin/
 obj/
 
