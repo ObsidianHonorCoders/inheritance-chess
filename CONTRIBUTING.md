@@ -102,7 +102,7 @@ docs: update contributing guidelines
 
 ## C++ Coding Standards
 
-- Language standard: **C++20**
+- Language standard: **C++17**
 - Formatting: `clang-format` (project `.clang-format` file)
 - Naming conventions:
   - Classes: `PascalCase`
@@ -117,7 +117,6 @@ docs: update contributing guidelines
 ---
 
 ## Authorship Header Standardization
-
 All `.cpp` and `.h` files **must include a standardized authorship header** at the top of the file.
 
 ### Required Header Template for .h Files
@@ -162,11 +161,10 @@ All `.cpp` and `.h` files **must include a standardized authorship header** at t
 - Public classes, functions, and APIs must be documented using Doxygen.
 - Example:
   ```cpp
-  /**
-   * @brief Normalizes a 3D vector.
-   * @param v Input vector.
-   * @return Normalized vector.
-   */
+  /// @brief Normalizes a 3D vector.
+  /// @param v Input vector.
+  /// @return Normalized vector.
+
   Vector normalize(const Vector& v);
   ```
 
