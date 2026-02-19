@@ -9,3 +9,5 @@ include_directories("include")
 file(GLOB SOURCES "src/*.cpp")
 add_executable(${EXE_NAME})
 target_sources(${EXE_NAME} PRIVATE ${SOURCES} main.cpp)
+
+add_subdirectory(tests)
