@@ -23,17 +23,17 @@ class Bishop : public Piece
     /// @param file The file (column) coordinate ('a' to 'h').
     /// @param rank The rank (row) coordinate ('1' to '8').
     /// @param color The color of the bishop (WHITE or BLACK).
-    Bishop(char file, char rank, PieceColor color) : Piece(color, PieceType::BISHOP) { set_position(file, rank); }
+    Bishop(char file, char rank, Piece::Color color) : Piece(color, Piece::Type::BISHOP) { set_position(file, rank); }
 
     /// @brief Virtual destructor for proper cleanup.
     virtual ~Bishop() override {};
 
     /// @brief      Calculate valid moves for this bishop.
     /// @param[out] p     Vector to be filled with valid move positions.
-    /// @param[in]  other Vector of pointers to all other pieces on the board for move validation.
+    /// @param[in]  other Vector of unique pointers to all other pieces on the board for move validation.
     /// @throws     std::runtime_error if the piece has an invalid color.
     /// @note       Bishops move diagonally without restriction.
-    virtual void moves(std::vector<PiecePosition>& p, const PieceList other) const override;
+    virtual void moves(Piece::PositionList& p, const Piece::List& other) const override;
 
     /// @brief      Calculate valid moves for this bishop.
     /// @param[out] p        Vector to be filled with valid move positions.
@@ -42,9 +42,7 @@ class Bishop : public Piece
     /// @throws     std::runtime_error if the piece has an invalid color.
     /// @note       Bishops move diagonally without restriction.
     /// @details    This overload provides piece positions and colors separately for move calculation.
-    virtual void moves(std::vector<PiecePosition>&      p,
-                       const std::vector<PiecePosition> other_p,
-                       const std::vector<PieceColor>    other_c) const override;
+    virtual void moves(Piece::PositionList& p, const Piece::PositionList& other_p, const Piece::ColorList& other_c) const override;
 };
 
 #endif // ICHESS_SRC_BISHOP

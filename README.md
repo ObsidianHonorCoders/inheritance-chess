@@ -9,7 +9,8 @@ Inheritance Chess is an enterprise-grade C++ chess engine that demonstrates obje
 ## Key Features
 
 - **OOP Architecture**: Implements sophisticated inheritance hierarchies and polymorphism to model chess pieces and game mechanics
-- **Type-Safe Design**: Type-safe operations and memory management
+- **Smart Pointer Memory Management**: Uses modern C++ smart pointers (std::unique_ptr) for automatic, exception-safe memory management
+- **Type-Safe Design**: Type-safe operations and memory management with RAII principles
 - **Extensible Framework**: Modular architecture enables seamless addition of new piece types and game rules
 - **Standards Compliance**: Fully adheres to industry best practices and coding standards with integrated clang-format configuration
 - **Comprehensive Documentation**: Complete Doxygen-generated API documentation with code examples
