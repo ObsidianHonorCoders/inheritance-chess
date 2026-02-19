@@ -16,6 +16,7 @@
 #define ICHESS_SRC_PIEZAS
 
 #include <vector>
+#include <memory>
 #include <stdexcept>
 
 #include "common.hpp"
@@ -27,10 +28,59 @@
 ///          the moves() method to define piece-specific movement rules.
 class Piece
 {
+  public:
+    /// @enum    Piece::Color
+    /// @brief   Represents the color of a chess piece.
+    /// @details Each chess piece belongs to either the white or black side, or no side (NONE).
+    enum class Color : char
+    {
+      NONE  = ' ', ///< No color assigned
+      WHITE = 'w', ///< White piece
+      BLACK = 'b'  ///< Black piece
+    };
+
+    /// @enum    Piece::Type
+    /// @brief   Represents the type of chess piece.
+    /// @details Enumerates all standard chess piece types, each with a unique character representation.
+    enum class Type : char
+    {
+      NONE   = ' ', ///< No piece type
+      PAWN   = 'P', ///< Pawn piece
+      KNIGHT = 'N', ///< Knight piece
+      BISHOP = 'B', ///< Bishop piece
+      ROOK   = 'R', ///< Rook piece
+      QUEEN  = 'Q', ///< Queen piece
+      KING   = 'K'  ///< King piece
+    };
+
+    /// @struct  Piece::Position
+    /// @brief   Represents a position on the chess board.
+    /// @details Uses algebraic notation where file (column) ranges from 'a' to 'h'
+    ///          and rank (row) ranges from '1' to '8'.
+    struct Position
+    {
+        char file; ///< File (column) coordinate, 'a' through 'h'
+        char rank; ///< Rank (row) coordinate, '1' through '8'
+    };
+
+    /// @class Piece::List
+    /// @brief A vector of unique pointers to chess pieces.
+    /// @note  This container owns the memory. Objects are automatically managed
+    ///        by smart pointers to prevent memory leaks.
+    using List = std::vector<std::unique_ptr<Piece>>;
+
+    /// @class Piece::PositionList
+    /// @brief A vector of chess pieces positions.
+    using PositionList = std::vector<Piece::Position>;
+
+    /// @class Piece::ColorList
+    /// @brief A vector of chess pieces colors.
+    using ColorList = std::vector<Piece::Color>;
+
   private:
-    PieceColor    color;    ///< Color of the piece (white, black, or none)
-    PiecePosition position; ///< Current position of the piece on the board
-    PieceType     type;     ///< Type of the piece (pawn, knight, bishop, etc.)
+    Piece::Color    color;    ///< Color of the piece (white, black, or none)
+    Piece::Type     type;     ///< Type of the piece (pawn, knight, bishop, etc.)
+    Piece::Position position; ///< Current position of the piece on the board
 
     /// @brief   Private default constructor.
     /// @details Prevents instantiation of Piece without a color and type.
@@ -40,7 +90,7 @@ class Piece
     /// @brief Construct a Piece with specified color and type.
     /// @param col The color of the piece (WHITE or BLACK).
     /// @param typ The type of the piece (PAWN, KNIGHT, BISHOP, ROOK, QUEEN, or KING).
-    Piece(PieceColor col, PieceType typ);
+    Piece(Piece::Color col, Piece::Type typ);
 
     /// @brief  Checks if the piece is black.
     /// @return True if the piece color is BLACK, false otherwise.
@@ -70,9 +120,9 @@ class Piece
 
     /// @brief      Pure virtual method to calculate valid moves for the piece.
     /// @param[out] p     Vector to be filled with valid move positions.
-    /// @param[in]  other Vector of pointers to all other pieces on the board for move validation.
+    /// @param[in]  other Vector of unique pointers to all other pieces on the board for move validation.
     /// @note       Must be implemented by derived classes for their specific movement rules.
-    virtual void moves(std::vector<PiecePosition>& p, const std::vector<Piece*> other) const = 0;
+    virtual void moves(PositionList& p, const List& other) const = 0;
 
     /// @brief      Pure virtual method to calculate valid moves for the piece.
     /// @param[out] p       Vector to be filled with valid move positions.
@@ -81,18 +131,12 @@ class Piece
     /// @note       Must be implemented by derived classes for their specific movement rules.
     /// @details    This overload provides piece positions and colors separately, allowing independent
     ///             validation of piece positions and ownership for move calculation.
-    virtual void
-    moves(std::vector<PiecePosition>& p, const std::vector<PiecePosition> other_p, const std::vector<PieceColor> other_c) const = 0;
+    virtual void moves(PositionList& p, const PositionList& other_p, const ColorList& other_c) const = 0;
 };
 
-/// @brief A list of pointers to chess pieces.
-/// @note  This container does NOT own the memory. Objects must be manually deleted
-///        or managed by the Board class to avoid memory leaks.
-using PieceList = std::vector<Piece*>;
-
 /// @brief  Helper function to safely get the character representation of a piece pointer.
-/// @param  p Pointer to a Piece object (may be null).
+/// @param  p Raw pointer to a Piece object (may be null).
 /// @return Character representation of the piece, or space ' ' if pointer is null.
-inline const char getchar(Piece* p) { return (p ? p->get_representation() : ' '); }
+inline const char getchar(const Piece* p) { return (p ? p->get_representation() : ' '); }
 
 #endif // ICHESS_SRC_PIEZAS
