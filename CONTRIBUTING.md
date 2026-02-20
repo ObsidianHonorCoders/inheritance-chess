@@ -105,9 +105,6 @@ docs: update contributing guidelines
 - Language standard: **C++17**
 - Formatting: `clang-format` (project `.clang-format` file)
 - Naming conventions:
-  - Classes: `PascalCase`
-  - Functions: `camelCase`
-  - Variables: `camelCase`
 | Entity          | Java / TS / JS | Python      | C / C++     | CMake                |
 |-----------------|----------------|-------------|-------------|----------------------|
 | Types (Classes) | PascalCase     | PascalCase  | PascalCase  | PascalCase (Targets) |
