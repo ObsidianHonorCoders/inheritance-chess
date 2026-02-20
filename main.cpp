@@ -1,16 +1,12 @@
-/// @file         main.cpp
-/// @brief        Entry point for the Inheritance ChessEngine application.
-/// @project      Inheritance Chess
-/// @organization Obsidian Honor Coders
-/// @author       Calileus
-/// @details      Demonstrates basic chess engine functionality including board setup,
-///               piece creation, and console-based board display using C++ inheritance
-///               and polymorphism principles.
-/// @date         2025-12-30
-/// @copyright    2026 Obsidian Honor Coders
-/// @license      Apache License 2.0 - http://www.apache.org/licenses/LICENSE-2.0
-/// @note         Licensed under the Apache License, Version 2.0 (the "License");
-///               you may not use this file except in compliance with the License.
+/// @file      main.cpp
+/// @brief     Entry point for Inheritance ChessEngine application.
+/// @author    Calileus
+/// @date      2025-12-30
+/// @copyright 2026 Obsidian Honor Coders. Licensed under Apache 2.0.
+/// @see       https://github.com/ObsidianHonorCoders/inheritance-chess
+/// @details   Demonstrates basic chess engine functionality including board setup,
+///            piece creation, and console-based board display using C++ inheritance
+///            and polymorphism principles.
 
 #include <iostream>
 #include <string>
