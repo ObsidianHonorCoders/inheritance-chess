@@ -39,7 +39,7 @@ class Bishop : public Piece
     /// @param[in]  other_c  Vector of colors corresponding to each piece in other_p for determining valid captures.
     /// @throws     std::runtime_error if the piece has an invalid color.
     /// @note       Bishops move diagonally without restriction.
-    virtual void moves(Piece::PositionList& p, const Piece::PositionList other_p, const Piece::ColorList other_c) const override;
+    virtual void moves(Piece::PositionList& p, const Piece::PositionList& other_p, const Piece::ColorList& other_c) const override;
 };
 
 #endif // ICHESS_SRC_BISHOP

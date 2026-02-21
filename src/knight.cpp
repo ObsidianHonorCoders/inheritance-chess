@@ -14,4 +14,4 @@
 #include <iostream>
 #include "knight.hpp"
 
-void Knight::moves(Piece::PositionList& p, const Piece::PositionList other_p, const Piece::ColorList other_c) const {}
+void Knight::moves(Piece::PositionList& p, const Piece::PositionList& other_p, const Piece::ColorList& other_c) const {}
