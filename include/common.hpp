@@ -30,6 +30,14 @@ struct Position
 /// @see   Position
 constexpr Position default_position = {};
 
+/// @brief  Check if a position is within board bounds.
+/// @param  pos The position to check.
+/// @return True if position is valid (a-h, 1-8), false otherwise.
+inline bool is_in_grid_range(const Position& pos)
+{
+  return ('a' <= pos.file && pos.file <= 'h' && '1' <= pos.rank && pos.rank <= '8');
+}
+
 /// @struct  Properties
 /// @brief   Stores additional information about the board state.
 /// @details This struct stores information about the state of the board that is not directly
