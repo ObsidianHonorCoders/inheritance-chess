@@ -38,6 +38,10 @@ inline bool is_in_grid_range(const Position& pos)
   return ('a' <= pos.file && pos.file <= 'h' && '1' <= pos.rank && pos.rank <= '8');
 }
 
+/// @brief  Check if two positions are equal.
+/// @return True if positions are equal, false otherwise.
+inline bool operator==(const Position& a, const Position& b) { return (a.file == b.file && a.rank == b.rank); }
+
 /// @struct  Properties
 /// @brief   Stores additional information about the board state.
 /// @details This struct stores information about the state of the board that is not directly
