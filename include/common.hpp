@@ -56,6 +56,7 @@ struct Properties
     bool     black_rook_queen_side_has_moved = false;      ///< Whether the black rook on the queen side has moved.
     Position last_move_start                 = {' ', ' '}; ///< The start position of the last move.
     Position last_move_end                   = {' ', ' '}; ///< The end position of the last move.
+    int      turns_since_pawn_move           = 0;          ///< Turns since a pawn was moved.
 };
 
 /// @brief Default properties constant.
