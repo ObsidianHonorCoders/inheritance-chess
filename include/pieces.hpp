@@ -67,11 +67,12 @@ class Piece
     /// @brief A vector of chess pieces colors.
     using ColorList = std::vector<Piece::Color>;
 
-  private:
+  protected:
     Piece::Color color;    ///< Color of the piece (white, black, or none)
     Piece::Type  type;     ///< Type of the piece (pawn, knight, bishop, etc.)
     Position     position; ///< Current position of the piece on the board
 
+  private:
     /// @brief   Private default constructor.
     /// @details Prevents instantiation of Piece without a color and type.
     Piece();
