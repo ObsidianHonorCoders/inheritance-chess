@@ -53,16 +53,6 @@ class Piece
       KING   = 'K'  ///< King piece
     };
 
-    /// @struct  Piece::Position
-    /// @brief   Represents a position on the chess board.
-    /// @details Uses algebraic notation where file (column) ranges from 'a' to 'h'
-    ///          and rank (row) ranges from '1' to '8'.
-    struct Position
-    {
-        char file; ///< File (column) coordinate, 'a' through 'h'
-        char rank; ///< Rank (row) coordinate, '1' through '8'
-    };
-
     /// @class Piece::List
     /// @brief A vector of unique pointers to chess pieces.
     /// @note  This container owns the memory. Objects are automatically managed
@@ -71,16 +61,16 @@ class Piece
 
     /// @class Piece::PositionList
     /// @brief A vector of chess pieces positions.
-    using PositionList = std::vector<Piece::Position>;
+    using PositionList = std::vector<Position>;
 
     /// @class Piece::ColorList
     /// @brief A vector of chess pieces colors.
     using ColorList = std::vector<Piece::Color>;
 
   private:
-    Piece::Color    color;    ///< Color of the piece (white, black, or none)
-    Piece::Type     type;     ///< Type of the piece (pawn, knight, bishop, etc.)
-    Piece::Position position; ///< Current position of the piece on the board
+    Piece::Color color;    ///< Color of the piece (white, black, or none)
+    Piece::Type  type;     ///< Type of the piece (pawn, knight, bishop, etc.)
+    Position     position; ///< Current position of the piece on the board
 
     /// @brief   Private default constructor.
     /// @details Prevents instantiation of Piece without a color and type.

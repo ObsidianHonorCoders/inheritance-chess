@@ -37,22 +37,6 @@ using BoardGrid = std::array<std::array<char, BOARD_SIZE>, BOARD_SIZE>;
 class Board
 {
   public:
-    /// @struct  Board::Properties
-    /// @brief   Stores additional information about the board state.
-    /// @details This struct stores information about the state of the board that is not directly
-    ///          represented by the pieces on the board.
-    struct Properties
-    {
-        bool            white_king_has_moved;            ///< Whether the white king has moved.
-        bool            black_king_has_moved;            ///< Whether the black king has moved.
-        bool            white_rook_king_side_has_moved;  ///< Whether the white rook on the king side has moved.
-        bool            white_rook_queen_side_has_moved; ///< Whether the white rook on the queen side has moved.
-        bool            black_rook_king_side_has_moved;  ///< Whether the black rook on the king side has moved.
-        bool            black_rook_queen_side_has_moved; ///< Whether the black rook on the queen side has moved.
-        Piece::Position last_move_start;                 ///< The start position of the last move.
-        Piece::Position last_move_end;                   ///< The end position of the last move.
-    };
-
     /// @brief   Construct a new Board.
     /// @details Initializes an empty board with cleared grid.
     Board();
@@ -89,6 +73,7 @@ class Board
   private:
     Piece::List pieces = {}; ///< Collection of pieces currently on the board
     BoardGrid   grid   = {}; ///< 8x8 character grid for display
+    Properties  state  = {false, false, false, false, false, false, {' ', ' '}, {' ', ' '}};
 };
 
 #endif // ICHESS_SRC_BOARD
