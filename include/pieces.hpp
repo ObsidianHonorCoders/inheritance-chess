@@ -99,7 +99,7 @@ class Piece
     /// @brief      Get the current position of the piece (file: 'a'-'h', rank: '1'-'8').
     /// @param[out] f Reference to store the file (column) coordinate.
     /// @param[out] r Reference to store the rank (row) coordinate.
-    void get_position(char& f, char& r);
+    void get_position(char& f, char& r) const;
 
     /// @brief  Get the character representation of the piece.
     /// @return Character representation (uppercase for white, lowercase for black).

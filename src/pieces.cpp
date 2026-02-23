@@ -57,7 +57,7 @@ void Piece::set_position(const char f, const char r)
 /// @brief      Get the current position of the piece (file: 'a'-'h', rank: '1'-'8').
 /// @param[out] f Reference to store the file (column) coordinate.
 /// @param[out] r Reference to store the rank (row) coordinate.
-void Piece::get_position(char& f, char& r)
+void Piece::get_position(char& f, char& r) const
 {
   f = position.file;
   r = position.rank;
