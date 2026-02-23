@@ -58,10 +58,7 @@ void Board::updateGrid()
 
 /// @brief   Remove and delete all pieces from the board.
 /// @details Smart pointers automatically clean up memory when vector is cleared.
-void Board::cleanPieces()
-{
-  pieces.clear();
-}
+void Board::cleanPieces() { pieces.clear(); }
 
 /// @brief   Add a piece to the board.
 /// @param   piece Unique pointer to the Piece object to add. Ownership is transferred to Board class.
