@@ -25,6 +25,11 @@ struct Position
     char rank = ' '; ///< Rank (row) coordinate, '1' through '8'
 };
 
+/// @brief Default position constant.
+/// @note  All fields are initialized to their default values.
+/// @see   Position
+constexpr Position default_position = {};
+
 /// @struct  Properties
 /// @brief   Stores additional information about the board state.
 /// @details This struct stores information about the state of the board that is not directly
@@ -40,5 +45,10 @@ struct Properties
     Position last_move_start                 = {' ', ' '}; ///< The start position of the last move.
     Position last_move_end                   = {' ', ' '}; ///< The end position of the last move.
 };
+
+/// @brief Default properties constant.
+/// @note  All fields are initialized to their default values.
+/// @see   Properties
+constexpr Properties default_properties = {};
 
 #endif // ICHESS_SRC_COMMON
