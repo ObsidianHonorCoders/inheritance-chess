@@ -123,7 +123,7 @@ class Piece
     /// @param[in]  other Vector of unique pointers to all other pieces on the board for move validation.
     /// @details    This method extracts positions and colors from the List and calls the pure virtual overload.
     ///             Provides a convenient interface for callers using the Piece::List container.
-    void moves(PositionList& p, const List& other) const;
+    void available_moves(PositionList& p, const List& other) const;
 
     /// @brief      Pure virtual method to calculate valid moves for the piece.
     /// @param[out] p       Vector to be filled with valid move positions.
@@ -132,7 +132,7 @@ class Piece
     /// @note       Must be implemented by derived classes for their specific movement rules.
     /// @details    This is the primary method that derived classes must implement.
     ///             It provides piece positions and colors separately for efficient move calculation.
-    virtual void moves(PositionList& p, const PositionList& other_p, const ColorList& other_c) const = 0;
+    virtual void available_moves(PositionList& p, const PositionList& other_p, const ColorList& other_c) const = 0;
 };
 
 /// @brief  Helper function to safely get the character representation of a piece pointer.

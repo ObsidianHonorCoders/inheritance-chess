@@ -40,7 +40,8 @@ class Rook : public Piece
     /// @throws     std::runtime_error if the piece has an invalid color.
     /// @note       Rooks move horizontally and vertically without restriction.
     /// @details    This overload provides piece positions and colors separately for move calculation.
-    virtual void moves(Piece::PositionList& p, const Piece::PositionList& other_p, const Piece::ColorList& other_c) const override;
+    virtual void
+    available_moves(Piece::PositionList& p, const Piece::PositionList& other_p, const Piece::ColorList& other_c) const override;
 };
 
 #endif // ICHESS_SRC_ROOK

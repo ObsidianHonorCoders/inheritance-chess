@@ -85,7 +85,7 @@ const char Piece::get_representation() const
 /// @param[in]  other Vector of unique pointers to all other pieces on the board for move validation.
 /// @details    This method extracts positions and colors from the List and calls the pure virtual overload.
 ///             Provides a convenient interface for callers using the Piece::List container.
-void Piece::moves(PositionList& p, const List& other) const
+void Piece::available_moves(PositionList& p, const List& other) const
 {
   PositionList other_p;
   ColorList    other_c;
@@ -108,5 +108,5 @@ void Piece::moves(PositionList& p, const List& other) const
       other_c.push_back(Piece::Color::NONE);
     }
   }
-  moves(p, other_p, other_c);
+  available_moves(p, other_p, other_c);
 }

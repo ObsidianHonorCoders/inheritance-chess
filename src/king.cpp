@@ -14,4 +14,4 @@
 #include <iostream>
 #include "king.hpp"
 
-void King::moves(Piece::PositionList& p, const Piece::PositionList& other_p, const Piece::ColorList& other_c) const {}
+void King::available_moves(Piece::PositionList& p, const Piece::PositionList& other_p, const Piece::ColorList& other_c) const {}
