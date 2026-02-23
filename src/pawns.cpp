@@ -4,7 +4,8 @@
 /// @organization Obsidian Honor Coders
 /// @author       Calileus
 /// @details      Provides Pawn-specific functionality and move calculation.
-///               Currently serves as a placeholder for future pawn movement logic.
+///               Implements complete pawn movement including forward moves,
+///               diagonal captures, and en passant captures using board properties.
 /// @date         2026-01-01
 /// @copyright    2026 Obsidian Honor Coders
 /// @license      Apache License 2.0 - http://www.apache.org/licenses/LICENSE-2.0
@@ -16,10 +17,14 @@
 
 #include "pawns.hpp"
 
-static const int get_direction(const Piece::Color c)
+/// @brief  Get the movement direction for a pawn based on its color.
+/// @param  my_color The color of the pawn.
+/// @return 1 for white pawns (move up), -1 for black pawns (move down).
+/// @throws std::runtime_error if the color is invalid.
+static const int get_direction(const Piece::Color my_color)
 {
   int direction = 0;
-  switch (c)
+  switch (my_color)
   {
   case Piece::Color::WHITE:
     direction = 1; // White pawns move up (increase rank)
@@ -33,6 +38,12 @@ static const int get_direction(const Piece::Color c)
   return direction;
 }
 
+/// @brief  Check if a pawn can capture at the target position.
+/// @param  other_p  Vector of positions of all other pieces on the board.
+/// @param  other_c  Vector of colors corresponding to each piece in other_p.
+/// @param  target_p The target position to check for capture.
+/// @param  my_color The color of the current pawn.
+/// @return True if the target position contains an opponent piece that can be captured.
 static const bool try_to_capture(const Piece::PositionList& other_p,
                                  const Piece::ColorList&    other_c,
                                  const Position&            target_p,
@@ -52,6 +63,13 @@ static const bool try_to_capture(const Piece::PositionList& other_p,
   return valid_capture_flag;
 }
 
+/// @brief   Check if en passant capture is possible at the target position.
+/// @param   props    Board properties containing last move information.
+/// @param   target_p The target position where en passant capture would occur.
+/// @param   direct   The movement direction of the pawn (1 for white, -1 for black).
+/// @return  True if en passant capture is valid at the target position.
+/// @details Uses board properties to verify that an opponent pawn just moved
+///          two squares forward and is now adjacent to the current pawn.
 static const bool try_to_capture_passant(const Properties& props, const Position& target_p, const int direct)
 {
   bool     valid_capture_flag   = false;
@@ -70,11 +88,15 @@ static const bool try_to_capture_passant(const Properties& props, const Position
 /// @brief      Calculate valid moves for this pawn.
 /// @param[out] p       Vector to be filled with valid move positions.
 /// @param[in]  other_p Vector of positions of all other pieces on the board for move validation.
-/// @param[in]  other_c Vector of colors corresponding to each piece in oth_p for determining valid captures.
+/// @param[in]  other_c Vector of colors corresponding to each piece in other_p for determining valid captures.
 /// @param[in]  props   Properties of the board for move validation, used for en passant.
 /// @throws     std::runtime_error if the piece has an invalid color.
 /// @note       Implementation distinguishes between white and black pawns for directional movement.
-/// @details    This overload provides piece positions and colors separately for move calculation.
+/// @details    Calculates all valid pawn moves including:
+///             - Forward moves (1 square, or 2 squares from starting position)
+///             - Diagonal captures of opponent pieces
+///             - En passant captures when opponent pawn moves two squares forward
+///             This overload provides piece positions and colors separately for move calculation.
 void Pawn::available_moves(Piece::PositionList&       p,
                            const Piece::PositionList& other_p,
                            const Piece::ColorList&    other_c,
