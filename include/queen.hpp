@@ -34,14 +34,16 @@ class Queen : public Piece
     virtual ~Queen() override {};
 
     /// @brief      Calculate valid moves for this queen.
-    /// @param[out] p        Vector to be filled with valid move positions.
-    /// @param[in]  other_p  Vector of positions of all other pieces on the board for move validation.
-    /// @param[in]  other_c  Vector of colors corresponding to each piece in other_p for determining valid captures.
+    /// @param[out] p       Vector to be filled with valid move positions.
+    /// @param[in]  other_p Vector of positions of all other pieces on the board for move validation.
+    /// @param[in]  other_c Vector of colors corresponding to each piece in other_p for determining valid captures.
+    /// @param[in]  props   Properties of the board for move validation, unused in Queen moves.
     /// @throws     std::runtime_error if the piece has an invalid color.
     /// @note       Queens combine rook and bishop movement patterns.
     virtual void available_moves(Piece::PositionList&       p,
                                  const Piece::PositionList& other_p,
-                                 const Piece::ColorList&    other_c) const override;
+                                 const Piece::ColorList&    other_c,
+                                 const Properties&          props = default_properties) const override;
 };
 
 #endif // ICHESS_SRC_QUEEN
