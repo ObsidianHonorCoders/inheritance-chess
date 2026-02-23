@@ -31,6 +31,7 @@ static const int get_direction(const Piece::Color my_color)
     break;
   case Piece::Color::BLACK:
     direction = -1; // Black pawns move down (decrease rank)
+    break;
   default:
     throw std::runtime_error("Invalid pawn color");
     break;
@@ -50,12 +51,12 @@ static const bool try_to_capture(const Piece::PositionList& other_p,
                                  const Piece::Color         my_color)
 {
   Piece::PositionList::const_iterator found_piece_itera  = std::find(other_p.begin(), other_p.end(), target_p);
-  size_t                              found_piece_index  = 0;
   bool                                valid_capture_flag = false;
   if (found_piece_itera != other_p.end())
   {
-    found_piece_index = std::distance(other_p.begin(), found_piece_itera);
-    if (other_c[found_piece_index] != my_color)
+    size_t found_piece_index = 0;
+    found_piece_index        = std::distance(other_p.begin(), found_piece_itera);
+    if (other_c[found_piece_index] != my_color && other_c[found_piece_index] != Piece::Color::NONE)
     {
       valid_capture_flag = true;
     }
