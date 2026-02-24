@@ -1,32 +1,29 @@
 # Contributing Guidelines
 
+## Purpose
+
 Thank you for your interest in contributing to this C++ project.  
 These guidelines ensure consistency, code quality, and long-term maintainability.
 
 ---
 
-**Table of Contents**
+## Table of Contents
 
 - Getting Started
+- Issue Reporting
 - Branching & Workflow
-- Commit Message Convention
-- C++ Coding Standards
-- Authorship Header Standardization
+- Pull Request Guidelines
+  - Commit Message Convention
+  - Pull Request Title Convention
+  - Pull Request Best Practices
+- Code Review Process
+- Coding Standards
+- File Header Standardization
 - Documentation Requirements
-## Testing
-
-New features must include tests; bug fixes should include regression tests when applicable. All tests and required CI checks must pass before merging (see CI & Merge Requirements below).
-
-Run tests locally using the project's build system. Example (CMake-based):
-
-```bash
-cmake --build build --target test
-ctest --test-dir build --output-on-failure
-```
-
-If no test harness exists yet, add tests under a `tests/` directory and include test commands in the PR description.
-
----
+- Testing
+- CI & Merge Requirements
+- Licensing
+- Questions
 
 
 ## Getting Started
@@ -42,6 +39,21 @@ If no test harness exists yet, add tests under a `tests/` directory and include 
    ```
 4. Make your changes following the rules below.
 5. Push your branch and open a Pull Request (PR).
+
+---
+
+## Issue Reporting
+
+When opening an issue, include:
+
+- **Title:** short descriptive title
+- **Summary:** one-paragraph description of the problem
+- **Steps to reproduce:** minimal steps and example input
+- **Expected vs Actual:** what you expected to happen and what actually happened
+- **Logs / output / screenshots:** any relevant output or images
+- **Environment:** OS, compiler, build options (if applicable)
+
+Use labels to indicate severity and area (e.g., `bug`, `enhancement`, `docs`).
 
 ---
 
@@ -64,22 +76,35 @@ PR branch flow and guidance:
 - Small bugfix branches (`fix/*`) may target `develop` unless urgent for `main`.
 - Rebase feature branches onto `develop` to keep history clean; use merge commits for release merges.
 
+---
 
-## Commit Message Convention
+## Pull Request Guidelines
+
+### Commit Message Convention
 
 Use clear, imperative, atomic commit messages.
 
 **Format:**
 ```
-<type>: <short description>
+<short description>
 ```
 
 **Examples:**
 ```
-feat: add vector normalization utility
-fix: handle division by zero in matrix operations
-docs: add authorship header standard
-refactor: simplify ownership semantics
+add vector normalization utility
+handle division by zero in matrix operations
+add authorship header standard
+simplify ownership semantics
+```
+
+
+### Pull Request Title Convention
+
+Use the same structured format for PR titles to make reviews and changelogs consistent and discoverable. Keep the PR title short (≤72 characters) and put extended details in the PR description.
+
+**Format:**
+```
+<type>(scope): short imperative summary
 ```
 
 Allowed types:
@@ -91,16 +116,64 @@ Allowed types:
 - build
 - chore
 
-Examples with scope (recommended):
+**PR title examples:**
 ```
 fix(board): handle null-pointer in move parser
 feat(pawns): add en-passant support
 docs: update contributing guidelines
 ```
 
+
+### Pull Request Best Practices
+
+1. One PR = One Logical Change
+
+A Pull Request should represent one coherent unit of work.
+
+Good examples:
+
+- "Add move validation for bishop"
+- "Refactor Board class to reduce coupling"
+- "Fix memory leak in GameManager"
+- "Add unit tests for checkmate detection"
+
+Bad example:
+
+- "Added bishop validation + refactored engine + updated README + fixed random bug"
+
+A PR should answer clearly: What problem does this PR solve? If the answer is multiple unrelated things → split it.
+
+2. Keep PRs Small (Reviewable Size)
+
+Ideal PR size: 100–400 lines changed (rule of thumb). Keep a focused scope so the change is easy to review in under 15 minutes.
+
+3. Avoid Mixing Unrelated Topics in One PR
+
+High-Level Rule:
+
+A good PR should be:
+
+- Small
+- Focused
+- Self-contained
+- Easy to review
+- Reversible
+
+Follow these practices to make reviews faster and higher-quality: describe intent, include testing notes, link related issues, add a short checklist (CI, tests, docs, formatting), and keep commits atomic (squash/rebase when requested).
+
 ---
 
-## C++ Coding Standards
+## Code Review Process
+
+- Every PR requires at least **one approval**.
+- Code must:
+  - Compile without warnings
+  - Pass all tests
+  - Follow formatting and documentation rules
+
+---
+
+## Coding Standards
 
 - Language standard: **C++17**
 - Formatting: `clang-format` (project `.clang-format` file)
@@ -119,31 +192,18 @@ docs: update contributing guidelines
 
 ---
 
-## Authorship Header Standardization
-All `.cpp` and `.h` files **must include a standardized authorship header** at the top of the file.
+## File Header Standardization
 
-### Required Header Template for .h Files
+All `.cpp` and `.h` files **must include a standardized file header** at the top.
 
-```cpp
-/// @file         [Filename]
-/// @brief        [Short description of the file's purpose, no more than one line sentence]
-/// @project      Inheritance Chess 
-/// @organization Obsidian Honor Coders
-/// @repository   https://github.com/ObsidianHonorCoders/inheritance-chess
-/// @author       [Original Author Name/GitHub Handler]
-/// @details      [Multiple line description.
-///               Of the file functionality.]
-/// @date         [Creation date]
-/// @copyright    MIT License - see LICENSE file for details
-```
-
-### Required Header Template for .cpp Files
+### Required Header Template for .cpp and .hpp Files
 
 ```cpp
 /// @file         [Filename]
 /// @brief        [Short description of the file's purpose, no more than one line sentence]
 /// @project      Inheritance Chess 
 /// @organization Obsidian Honor Coders
+/// @repository   https://github.com/ObsidianHonorCoders/inheritance-chess (for .hpp files)
 /// @author       [Original Author Name/GitHub Handler]
 /// @details      [Multiple line description.
 ///               Of the file functionality.]
@@ -179,54 +239,12 @@ All `.cpp` and `.h` files **must include a standardized authorship header** at t
 - Bug fixes must include regression tests.
 - All tests must pass before merging.
 
----
+Run tests locally using the project's build system. Example (CMake-based):
 
-## Code Review Process
-
-- Every PR requires at least **one approval**.
-- Code must:
-  - Compile without warnings
-  - Pass all tests
-  - Follow formatting and documentation rules
-
----
-
-## Pull Request Best Practices
-
-1. One PR = One Logical Change
-
-A Pull Request should represent one coherent unit of work.
-
-Good examples:
-
-- “Add move validation for bishop”
-- “Refactor Board class to reduce coupling”
-- “Fix memory leak in GameManager”
-- “Add unit tests for checkmate detection”
-
-Bad example:
-
-- “Added bishop validation + refactored engine + updated README + fixed random bug”
-
-A PR should answer clearly: What problem does this PR solve? If the answer is multiple unrelated things → split it.
-
-2. Keep PRs Small (Reviewable Size)
-
-Ideal PR size: 100–400 lines changed (rule of thumb). Keep a focused scope so the change is easy to review in under 15 minutes.
-
-3. Avoid Mixing Unrelated Topics in One PR
-
-High-Level Rule:
-
-A good PR should be:
-
-- Small
-- Focused
-- Self-contained
-- Easy to review
-- Reversible
-
-Follow these practices to make reviews faster and higher-quality: describe intent, include testing notes, link related issues, add a short checklist (CI, tests, docs, formatting), and keep commits atomic (squash/rebase when requested).
+```bash
+cmake --build build --target test
+ctest --test-dir build --output-on-failure
+```
 
 ---
 
@@ -237,21 +255,6 @@ Follow these practices to make reviews faster and higher-quality: describe inten
 - Do not merge until CI is green and required approvals are present. Prefer `Squash and merge` or `Rebase and merge` per the project's preference.
 
 If CI is flaky, address or document the flakiness in the PR; do not bypass checks unless explicitly authorized by maintainers.
-
----
-
-## Issue Reporting
-
-When opening an issue, include:
-
-- **Title:** short descriptive title
-- **Summary:** one-paragraph description of the problem
-- **Steps to reproduce:** minimal steps and example input
-- **Expected vs Actual:** what you expected to happen and what actually happened
-- **Logs / output / screenshots:** any relevant output or images
-- **Environment:** OS, compiler, build options (if applicable)
-
-Use labels to indicate severity and area (e.g., `bug`, `enhancement`, `docs`).
 
 ---
 
