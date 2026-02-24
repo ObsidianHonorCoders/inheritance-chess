@@ -47,3 +47,15 @@ class PawnTest : public ::testing::Test
       p_black_pawn.reset();
     }
 };
+
+/// @brief   Test pawn creation and smart pointer initialization.
+/// @details Verifies that new Pawn instances are properly created
+///          and the smart pointers are not null after SetUp.
+TEST_F(PawnTest, CreationState)
+{
+  // Expect valid smart pointers from SetUp
+  EXPECT_NE(p_white_pawn.get(), nullptr);
+  EXPECT_NE(p_black_pawn.get(), nullptr);
+  EXPECT_TRUE(p_white_pawn != nullptr);
+  EXPECT_TRUE(p_black_pawn != nullptr);
+}
