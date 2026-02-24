@@ -26,8 +26,8 @@ class Pawn : public Piece
 {
   public:
     /// @brief Construct a Pawn at the specified position and color.
-    /// @param file The file (column) coordinate ('a' to 'h').
-    /// @param rank The rank (row) coordinate ('1' to '8').
+    /// @param file  The file (column) coordinate ('a' to 'h').
+    /// @param rank  The rank (row) coordinate ('1' to '8').
     /// @param color The color of the pawn (WHITE or BLACK).
     Pawn(char file, char rank, Piece::Color color) : Piece(color, Piece::Type::PAWN) { set_position(file, rank); }
 
@@ -35,13 +35,17 @@ class Pawn : public Piece
     virtual ~Pawn() override {};
 
     /// @brief      Calculate valid moves for this pawn.
-    /// @param[out] p        Vector to be filled with valid move positions.
-    /// @param[in]  other_p  Vector of positions of all other pieces on the board for move validation.
-    /// @param[in]  other_c  Vector of colors corresponding to each piece in other_p for determining valid captures.
+    /// @param[out] p       Vector to be filled with valid move positions.
+    /// @param[in]  other_p Vector of positions of all other pieces on the board for move validation.
+    /// @param[in]  other_c Vector of colors corresponding to each piece in other_p for determining valid captures.
+    /// @param[in]  props   Properties of the board for move validation, unused in passant capture.
     /// @throws     std::runtime_error if the piece has an invalid color.
     /// @note       Implementation distinguishes between white and black pawns for directional movement.
     /// @details    This overload provides piece positions and colors separately for move calculation.
-    virtual void moves(Piece::PositionList& p, const Piece::PositionList& other_p, const Piece::ColorList& other_c) const override;
+    virtual void available_moves(Piece::PositionList&       p,
+                                 const Piece::PositionList& other_p,
+                                 const Piece::ColorList&    other_c,
+                                 const Properties&          props) const override;
 };
 
 #endif // ICHESS_SRC_PAWNS

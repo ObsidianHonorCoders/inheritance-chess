@@ -73,6 +73,7 @@ class Board
   private:
     Piece::List pieces = {}; ///< Collection of pieces currently on the board
     BoardGrid   grid   = {}; ///< 8x8 character grid for display
+    Properties  state  = {}; ///< Current state properties of the board
 };
 
 #endif // ICHESS_SRC_BOARD

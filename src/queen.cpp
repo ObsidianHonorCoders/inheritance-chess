@@ -14,4 +14,9 @@
 #include <iostream>
 #include "queen.hpp"
 
-void Queen::moves(Piece::PositionList& p, const Piece::PositionList& other_p, const Piece::ColorList& other_c) const {}
+void Queen::available_moves(Piece::PositionList&       p,
+                            const Piece::PositionList& other_p,
+                            const Piece::ColorList&    other_c,
+                            const Properties&          props) const
+{
+}

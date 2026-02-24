@@ -57,7 +57,7 @@ void Piece::set_position(const char f, const char r)
 /// @brief      Get the current position of the piece (file: 'a'-'h', rank: '1'-'8').
 /// @param[out] f Reference to store the file (column) coordinate.
 /// @param[out] r Reference to store the rank (row) coordinate.
-void Piece::get_position(char& f, char& r)
+void Piece::get_position(char& f, char& r) const
 {
   f = position.file;
   r = position.rank;
@@ -83,9 +83,10 @@ const char Piece::get_representation() const
 /// @brief      Calculate valid moves for this piece using List parameter.
 /// @param[out] p     Vector to be filled with valid move positions.
 /// @param[in]  other Vector of unique pointers to all other pieces on the board for move validation.
+/// @param[in]  props   Properties of the board for move validation.
 /// @details    This method extracts positions and colors from the List and calls the pure virtual overload.
 ///             Provides a convenient interface for callers using the Piece::List container.
-void Piece::moves(PositionList& p, const List& other) const
+void Piece::available_moves(PositionList& p, const List& other, const Properties& props) const
 {
   PositionList other_p;
   ColorList    other_c;
@@ -108,5 +109,5 @@ void Piece::moves(PositionList& p, const List& other) const
       other_c.push_back(Piece::Color::NONE);
     }
   }
-  moves(p, other_p, other_c);
+  available_moves(p, other_p, other_c, props);
 }

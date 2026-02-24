@@ -34,12 +34,16 @@ class Bishop : public Piece
     virtual ~Bishop() override {};
 
     /// @brief      Calculate valid moves for this bishop.
-    /// @param[out] p        Vector to be filled with valid move positions.
-    /// @param[in]  other_p  Vector of positions of all other pieces on the board for move validation.
-    /// @param[in]  other_c  Vector of colors corresponding to each piece in other_p for determining valid captures.
+    /// @param[out] p       Vector to be filled with valid move positions.
+    /// @param[in]  other_p Vector of positions of all other pieces on the board for move validation.
+    /// @param[in]  other_c Vector of colors corresponding to each piece in other_p for determining valid captures.
+    /// @param[in]  props   Properties of the board for move validation, unused in Bishop moves.
     /// @throws     std::runtime_error if the piece has an invalid color.
     /// @note       Bishops move diagonally without restriction.
-    virtual void moves(Piece::PositionList& p, const Piece::PositionList& other_p, const Piece::ColorList& other_c) const override;
+    virtual void available_moves(Piece::PositionList&       p,
+                                 const Piece::PositionList& other_p,
+                                 const Piece::ColorList&    other_c,
+                                 const Properties&          props = default_properties) const override;
 };
 
 #endif // ICHESS_SRC_BISHOP
