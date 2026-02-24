@@ -21,6 +21,7 @@
 *.h            @ObsidianHonorCoders/core-devs-ohc
 *.hpp          @ObsidianHonorCoders/core-devs-ohc
 *.py           @ObsidianHonorCoders/core-devs-ohc
+*.ipynb        @ObsidianHonorCoders/core-devs-ohc
 *.md           @Calileus @Fernando-JAL
 *.txt          @Calileus @Fernando-JAL
 *.cmake        @Calileus
