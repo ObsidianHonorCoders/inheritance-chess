@@ -9,6 +9,8 @@
 #include <iostream>
 #include "bishop.hpp"
 
-void Bishop::moves(Piece::PositionList& p, const Piece::List& other) const {}
-
-void Bishop::moves(Piece::PositionList& p, const Piece::PositionList& other_p, const Piece::ColorList& other_c) const {}
+void Bishop::available_moves(Piece::PositionList&       p,
+                             const Piece::PositionList& other_p,
+                             const Piece::ColorList&    other_c) const
+{
+}

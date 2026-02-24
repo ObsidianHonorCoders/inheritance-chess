@@ -1,0 +1,27 @@
+# Obsidian Honor Coders CODEOWNERS file
+# GitHub doesn't combine rules, the order of the lines is everything.
+# The very last rule line that matches a file is used. Everything above it is ignored.
+
+# Global fallback
+#   These reviewers will be requested if no other owner pattern matches.
+* @Calileus @Fernando-JAL
+
+# Folder Owners
+/.github/      @Calileus @Fernando-JAL
+/cmakehelpers/ @Calileus
+/docs/         @Fernando-JAL
+/doc/          @Calileus # Reserved for doxygen documentation
+/src/          @Calileus
+/include/      @Calileus
+/tests/        @Fernando-JAL
+
+# File extension Owners
+*.cpp          @ObsidianHonorCoders/core-devs-ohc
+*.c            @ObsidianHonorCoders/core-devs-ohc
+*.h            @ObsidianHonorCoders/core-devs-ohc
+*.hpp          @ObsidianHonorCoders/core-devs-ohc
+*.py           @ObsidianHonorCoders/core-devs-ohc
+*.ipynb        @ObsidianHonorCoders/core-devs-ohc
+*.md           @Calileus @Fernando-JAL
+*.txt          @Calileus @Fernando-JAL
+*.cmake        @Calileus

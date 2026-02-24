@@ -9,6 +9,8 @@
 #include <iostream>
 #include "rook.hpp"
 
-void Rook::moves(Piece::PositionList& p, const Piece::List& other) const {}
-
-void Rook::moves(Piece::PositionList& p, const Piece::PositionList& other_p, const Piece::ColorList& other_c) const {}
+void Rook::available_moves(Piece::PositionList&       p,
+                           const Piece::PositionList& other_p,
+                           const Piece::ColorList&    other_c) const
+{
+}
