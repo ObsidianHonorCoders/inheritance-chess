@@ -224,11 +224,14 @@ All `.cpp` and `.h` files **must include a standardized file header** at the top
 - Public classes, functions, and APIs must be documented using Doxygen.
 - Example:
   ```cpp
-  /// @brief Normalizes a 3D vector.
-  /// @param v Input vector.
-  /// @return Normalized vector.
-
-  Vector normalize(const Vector& v);
+  /// @brief      Pure virtual method to calculate valid moves for the piece.
+  /// @param[out] p       Vector to be filled with valid move positions.
+  /// @param[in]  other_p Vector of positions of all other pieces on the board for move validation.
+  /// @param[in]  other_c Vector of colors corresponding to each piece in oth_p for determining valid captures.
+  /// @note       Must be implemented by derived classes for their specific movement rules.
+  /// @details    This overload provides piece positions and colors separately, allowing independent
+  ///             validation of piece positions and ownership for move calculation.
+  virtual void moves(PositionList& p, const PositionList& other_p, const ColorList& other_c) const = 0;
   ```
 
 ---
