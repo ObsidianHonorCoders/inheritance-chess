@@ -21,7 +21,7 @@ PointerAlignment:                    Left
 ReferenceAlignment:                  Left
 MaxEmptyLinesToKeep:                 2
 NamespaceIndentation:                All
-ColumnLimit:                         135
+ColumnLimit:                         120
 BinPackArguments:                    false
 BinPackParameters:                   false
 BreakBeforeBinaryOperators:          NonAssignment
