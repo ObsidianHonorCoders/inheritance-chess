@@ -90,9 +90,9 @@ void Piece::available_moves(PositionList& p, const List& other, const Properties
 {
   PositionList other_p;
   ColorList    other_c;
+  char         f, r;
   for (const std::unique_ptr<Piece>& piece : other)
   {
-    char f, r;
     piece->get_position(f, r);
     other_p.push_back({f, r});
 
