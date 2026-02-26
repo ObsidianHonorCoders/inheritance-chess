@@ -3,7 +3,7 @@
 /// @project      Inheritance Chess
 /// @organization Obsidian Honor Coders
 /// @repository   https://github.com/ObsidianHonorCoders/inheritance-chess
-/// @author       Calileus
+/// @author       matematik-isto
 /// @details      Defines the Rook class that inherits from Piece and implements
 ///               rook-specific movement rules for the chess game.
 /// @date         2026-02-06

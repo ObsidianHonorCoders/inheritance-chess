@@ -2,7 +2,7 @@
 /// @brief        Implementation of the Rook chess piece class.
 /// @project      Inheritance Chess
 /// @organization Obsidian Honor Coders
-/// @author       Calileus
+/// @author       matematik-isto
 /// @details      Provides Rook-specific functionality and move calculation.
 ///               Currently serves as a placeholder for future rook movement logic.
 /// @date         2026-02-06
