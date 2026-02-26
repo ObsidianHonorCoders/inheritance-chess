@@ -194,21 +194,31 @@ Follow these practices to make reviews faster and higher-quality: describe inten
 
 ## File Header Standardization
 
-All `.cpp` and `.h` files **must include a standardized file header** at the top.
+All `.cpp` and `.hpp` files **must include a standardized authorship header** at the top of the file.
 
-### Required Header Template for .cpp and .hpp Files
+### Required Header Template for .hpp Files
 
 ```cpp
-/// @file         [Filename]
-/// @brief        [Short description of the file's purpose, no more than one line sentence]
-/// @project      Inheritance Chess 
-/// @organization Obsidian Honor Coders
-/// @repository   https://github.com/ObsidianHonorCoders/inheritance-chess (for .hpp files)
-/// @author       [Original Author Name/GitHub Handler]
-/// @details      [Multiple line description.
-///               Of the file functionality.]
-/// @date         [Creation date]
-/// @copyright    MIT License - see LICENSE file for details
+/// @file      common.hpp
+/// @brief     Common types and enumerations for the Chess Engine.
+/// @author    Calileus
+/// @date      2026-01-27
+/// @copyright 2026 Obsidian Honor Coders. Licensed under Apache 2.0.
+/// @see       https://github.com/ObsidianHonorCoders/inheritance-chess
+/// @details   Defines shared enumerations for piece colors, piece types, and position
+///            structures used throughout the inheritance-chess engine.
+```
+
+### Required Header Template for .cpp Files
+
+```cpp
+/// @file      common.hpp
+/// @brief     Common types and enumerations for the Chess Engine.
+/// @author    Calileus
+/// @date      2026-01-27
+/// @copyright 2026 Obsidian Honor Coders. Licensed under Apache 2.0.
+/// @details   Defines shared enumerations for piece colors, piece types, and position
+///            structures used throughout the inheritance-chess engine.
 ```
 
 ### Rules

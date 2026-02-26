@@ -1,16 +1,11 @@
-/// @file         pieces.hpp
-/// @brief        Base class for all chess pieces using polymorphism.
-/// @project      Inheritance Chess
-/// @organization Obsidian Honor Coders
-/// @repository   https://github.com/ObsidianHonorCoders/inheritance-chess
-/// @author       Calileus
-/// @details      Defines the abstract Piece (piece) class that serves as the base
-///               for all specific piece types in the chess engine.
-/// @date         2026-01-01
-/// @copyright    2026 Obsidian Honor Coders
-/// @license      Apache License 2.0 - http://www.apache.org/licenses/LICENSE-2.0
-/// @note         Licensed under the Apache License, Version 2.0 (the "License");
-///               you may not use this file except in compliance with the License.
+/// @file      pieces.hpp
+/// @brief     Base class for all chess pieces using polymorphism.
+/// @author    Calileus
+/// @date      2026-01-01
+/// @copyright 2026 Obsidian Honor Coders. Licensed under Apache 2.0.
+/// @see       https://github.com/ObsidianHonorCoders/inheritance-chess
+/// @details   Defines the abstract Piece (piece) class that serves as the base
+///            for all specific piece types in the chess engine.
 
 #ifndef ICHESS_SRC_PIEZAS
 #define ICHESS_SRC_PIEZAS
