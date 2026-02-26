@@ -30,6 +30,18 @@ struct Position
 /// @see   Position
 constexpr Position default_position = {};
 
+/// @brief  Check if a position is within board bounds.
+/// @param  pos The position to check.
+/// @return True if position is valid (a-h, 1-8), false otherwise.
+inline bool is_in_grid_range(const Position& pos)
+{
+  return ('a' <= pos.file && pos.file <= 'h' && '1' <= pos.rank && pos.rank <= '8');
+}
+
+/// @brief  Check if two positions are equal.
+/// @return True if positions are equal, false otherwise.
+inline bool operator==(const Position& a, const Position& b) { return (a.file == b.file && a.rank == b.rank); }
+
 /// @struct  Properties
 /// @brief   Stores additional information about the board state.
 /// @details This struct stores information about the state of the board that is not directly
@@ -46,6 +58,7 @@ struct Properties
     bool     black_rook_queen_side_has_moved = false;      ///< Whether the black rook on the queen side has moved.
     Position last_move_start                 = {' ', ' '}; ///< The start position of the last move.
     Position last_move_end                   = {' ', ' '}; ///< The end position of the last move.
+    int      turns_since_pawn_move           = 0;          ///< Turns since a pawn was moved.
 };
 
 /// @brief Default properties constant.

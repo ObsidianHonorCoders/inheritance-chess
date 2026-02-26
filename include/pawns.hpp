@@ -26,8 +26,8 @@ class Pawn : public Piece
 {
   public:
     /// @brief Construct a Pawn at the specified position and color.
-    /// @param file The file (column) coordinate ('a' to 'h').
-    /// @param rank The rank (row) coordinate ('1' to '8').
+    /// @param file  The file (column) coordinate ('a' to 'h').
+    /// @param rank  The rank (row) coordinate ('1' to '8').
     /// @param color The color of the pawn (WHITE or BLACK).
     Pawn(char file, char rank, Piece::Color color) : Piece(color, Piece::Type::PAWN) { set_position(file, rank); }
 
