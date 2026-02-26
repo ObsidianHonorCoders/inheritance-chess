@@ -36,6 +36,8 @@ constexpr Position default_position = {};
 ///          represented by the pieces on the board.
 struct Properties
 {
+    bool     white_king_is_in_check          = false;      ///< Whether the white king is in check.
+    bool     black_king_is_in_check          = false;      ///< Whether the black king is in check.
     bool     white_king_has_moved            = false;      ///< Whether the white king has moved.
     bool     black_king_has_moved            = false;      ///< Whether the black king has moved.
     bool     white_rook_king_side_has_moved  = false;      ///< Whether the white rook on the king side has moved.
