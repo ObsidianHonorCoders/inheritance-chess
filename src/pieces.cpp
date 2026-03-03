@@ -1,15 +1,10 @@
-/// @file         pieces.cpp
-/// @brief        Implementation of the base Piece (chess piece) class.
-/// @project      Inheritance Chess
-/// @organization Obsidian Honor Coders
-/// @author       Calileus
-/// @details      Provides implementations for color checking, position management,
-///               and piece representation functionality.
-/// @date         2026-01-01
-/// @copyright    2026 Obsidian Honor Coders
-/// @license      Apache License 2.0 - http://www.apache.org/licenses/LICENSE-2.0
-/// @note         Licensed under the Apache License, Version 2.0 (the "License");
-///               you may not use this file except in compliance with the License.
+/// @file      pieces.cpp
+/// @brief     Implementation of the base Piece (chess piece) class.
+/// @author    Calileus
+/// @date      2026-01-01
+/// @copyright 2026 Obsidian Honor Coders. Licensed under Apache 2.0.
+/// @details   Provides implementations for color checking, position management,
+///            and piece representation functionality.
 
 #include <cctype>
 
