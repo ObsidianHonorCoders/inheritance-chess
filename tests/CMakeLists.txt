@@ -28,24 +28,28 @@ target_include_directories("test_${EXE_NAME}" PRIVATE "${CMAKE_SOURCE_DIR}/cci/i
 file(GLOB CCI_PROJECT_SOURCES "${CMAKE_SOURCE_DIR}/cci/src/*.cpp")
 target_sources("test_${EXE_NAME}" PRIVATE ${CCI_PROJECT_SOURCES})
 
+# CPL component test support (Phase 2) - now active
+file(GLOB CPL_TEST_SOURCES "../cpl/tests/test_*.cpp")
+target_sources("test_${EXE_NAME}" PRIVATE ${CPL_TEST_SOURCES})
+target_include_directories("test_${EXE_NAME}" PRIVATE "${CMAKE_SOURCE_DIR}/cpl/include")
+file(GLOB CPL_PROJECT_SOURCES "${CMAKE_SOURCE_DIR}/cpl/src/*.cpp")
+target_sources("test_${EXE_NAME}" PRIVATE ${CPL_PROJECT_SOURCES})
+
 # Future modular component tests (Phase 2) - structure ready
 # file(GLOB CBM_TEST_SOURCES "../cbm/tests/test_*.cpp")
-# file(GLOB CPL_TEST_SOURCES "../cpl/tests/test_*.cpp")
 # file(GLOB CTU_TEST_SOURCES "../ctu/tests/test_*.cpp")
 # file(GLOB CGH_TEST_SOURCES "../cgh/tests/test_*.cpp")
 
-# target_sources("test_${EXE_NAME}" PRIVATE ${CBM_TEST_SOURCES} ${CPL_TEST_SOURCES} ${CTU_TEST_SOURCES} ${CGH_TEST_SOURCES})
+# target_sources("test_${EXE_NAME}" PRIVATE ${CBM_TEST_SOURCES} ${CTU_TEST_SOURCES} ${CGH_TEST_SOURCES})
 
 # target_include_directories("test_${EXE_NAME}" PRIVATE "${CMAKE_SOURCE_DIR}/cbm/include")
-# target_include_directories("test_${EXE_NAME}" PRIVATE "${CMAKE_SOURCE_DIR}/cpl/include")
 # target_include_directories("test_${EXE_NAME}" PRIVATE "${CMAKE_SOURCE_DIR}/ctu/include")
 # target_include_directories("test_${EXE_NAME}" PRIVATE "${CMAKE_SOURCE_DIR}/cgh/include")
 
 # file(GLOB CBM_PROJECT_SOURCES "${CMAKE_SOURCE_DIR}/cbm/src/*.cpp")
-# file(GLOB CPL_PROJECT_SOURCES "${CMAKE_SOURCE_DIR}/cpl/src/*.cpp")
 # file(GLOB CTU_PROJECT_SOURCES "${CMAKE_SOURCE_DIR}/ctu/src/*.cpp")
 # file(GLOB CGH_PROJECT_SOURCES "${CMAKE_SOURCE_DIR}/cgh/src/*.cpp")
 
-# target_sources("test_${EXE_NAME}" PRIVATE ${CBM_PROJECT_SOURCES} ${CPL_PROJECT_SOURCES} ${CTU_PROJECT_SOURCES} ${CGH_PROJECT_SOURCES})
+# target_sources("test_${EXE_NAME}" PRIVATE ${CBM_PROJECT_SOURCES} ${CTU_PROJECT_SOURCES} ${CGH_PROJECT_SOURCES})
 
 add_test(COMMAND "test_${EXE_NAME}" NAME "${EXE_NAME}_Tests")
