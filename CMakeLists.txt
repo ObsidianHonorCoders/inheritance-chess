@@ -5,9 +5,30 @@ add_definitions(-DUNICODE -D_UNICODE)
 
 project(inheritance_chess_project)
 
+# Legacy support for existing structure (leveraging existing patterns)
 include_directories("include")
-file(GLOB SOURCES "src/*.cpp")
+file(GLOB LEGACY_SOURCES "src/*.cpp")
 add_executable(${EXE_NAME})
-target_sources(${EXE_NAME} PRIVATE ${SOURCES} main.cpp)
+target_sources(${EXE_NAME} PRIVATE ${LEGACY_SOURCES} main.cpp)
 
+# New modular CCI component support
+include_directories("cci/include")
+file(GLOB CCI_SOURCES "cci/src/*.cpp")
+target_sources(${EXE_NAME} PRIVATE ${CCI_SOURCES})
+
+# Future modular components (Phase 2) - structure ready
+# These will be activated as components are implemented
+# include_directories("cbm/include")
+# include_directories("cpl/include")
+# include_directories("ctu/include")
+# include_directories("cgh/include")
+
+# file(GLOB CBM_SOURCES "cbm/src/*.cpp")
+# file(GLOB CPL_SOURCES "cpl/src/*.cpp")
+# file(GLOB CTU_SOURCES "ctu/src/*.cpp")
+# file(GLOB CGH_SOURCES "cgh/src/*.cpp")
+
+# target_sources(${EXE_NAME} PRIVATE ${CBM_SOURCES} ${CPL_SOURCES} ${CTU_SOURCES} ${CGH_SOURCES})
+
+# Add tests (leveraging existing test structure)
 add_subdirectory(tests)
