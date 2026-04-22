@@ -9,6 +9,8 @@
 
 #include "game_handler.h"
 #include <ctime>
+#include <iostream>
+#include <algorithm>
 
 namespace Chess
 {
@@ -25,6 +27,8 @@ namespace Chess
     session_.game_id = "game_" + std::to_string(std::time(nullptr));
     session_.move_history.clear();
     session_.state = GameState::ONGOING;
+    session_.white_time = std::chrono::milliseconds(600000); // 10 minutes
+    session_.black_time = std::chrono::milliseconds(600000); // 10 minutes
   }
 
   void ChessGameHandler::load_game_from_fen(const std::string& fen)
@@ -36,39 +40,239 @@ namespace Chess
 
   bool ChessGameHandler::make_move(const std::string& algebraic_move)
   {
-    // TODO: Convert algebraic to Move and call make_move(const Move&)
-    return false;
+    try 
+    {
+      Move move = translation_unit_->algebraic_to_move(algebraic_move, current_grid_);
+      return make_move(move);
+    }
+    catch (const std::exception& e)
+    {
+      std::cerr << "Invalid move: " << algebraic_move << " - " << e.what() << std::endl;
+      return false;
+    }
   }
 
   bool ChessGameHandler::make_move(const Move& move)
   {
-    // TODO: Validate move, update grid, check for game end conditions
-    return false;
+    // Validate move using board manager
+    if (!board_manager_->validate_move(current_grid_, move))
+    {
+      return false;
+    }
+
+    // Execute move on grid
+    if (!execute_move_on_grid(move))
+    {
+      return false;
+    }
+
+    // Add to move history
+    session_.move_history.push_back(move);
+
+    // Switch turns
+    current_grid_.switch_turn();
+
+    // Check for game end conditions
+    update_game_state();
+
+    return true;
   }
 
-  std::string ChessGameHandler::get_current_fen() const { return translation_unit_->internal_to_fen(current_grid_); }
+  std::string ChessGameHandler::get_current_fen() const 
+  { 
+    return translation_unit_->internal_to_fen(current_grid_); 
+  }
 
   std::vector<Move> ChessGameHandler::get_legal_moves() const
   {
-    // TODO: Get all raw moves and filter by legality
-    return {};
+    std::vector<Move> legal_moves;
+    
+    // Get all pieces for current player
+    auto pieces = current_grid_.get_all_pieces();
+    
+    for (const auto& piece : pieces)
+    {
+      if (piece->get_color() == current_grid_.current_turn)
+      {
+        PositionList moves;
+        piece->available_moves(moves, pieces, current_grid_);
+        
+        for (const auto& move_pos : moves)
+        {
+          Move test_move(piece->get_position(), move_pos);
+          if (board_manager_->validate_move(current_grid_, test_move))
+          {
+            legal_moves.push_back(test_move);
+          }
+        }
+      }
+    }
+    
+    return legal_moves;
   }
 
-  GameState ChessGameHandler::get_game_state() const { return session_.state; }
+  GameState ChessGameHandler::get_game_state() const 
+  { 
+    return session_.state; 
+  }
 
   void ChessGameHandler::start_timer(Color color)
   {
-    // TODO: Start clock for color
+    // TODO: Implement timer functionality
+    // This would require integrating with a timing library
   }
 
   void ChessGameHandler::stop_timer(Color color)
   {
-    // TODO: Stop clock for color
+    // TODO: Implement timer functionality
+    // This would require integrating with a timing library
   }
 
   std::chrono::milliseconds ChessGameHandler::get_time_remaining(Color color) const
   {
     return (color == Color::WHITE) ? session_.white_time : session_.black_time;
+  }
+
+  void ChessGameHandler::display_board() const
+  {
+    // Simple text display adapted from existing Board patterns
+    std::cout << "\n  a b c d e f g h\n";
+    std::cout << " +-----------------+\n";
+    
+    for (int rank = 7; rank >= 0; --rank)
+    {
+      std::cout << rank + 1 << "|";
+      for (int file = 0; file < 8; ++file)
+      {
+        Position pos(file, rank);
+        const auto& piece = current_grid_.get_piece(pos);
+        
+        if (piece.has_value())
+        {
+          char piece_char = get_piece_display_char(piece->type, piece->color);
+          std::cout << " " << piece_char;
+        }
+        else
+        {
+          std::cout << " .";
+        }
+      }
+      std::cout << " |\n";
+    }
+    
+    std::cout << " +-----------------+\n";
+    std::cout << "Turn: " << (current_grid_.current_turn == Color::WHITE ? "White" : "Black") << "\n";
+  }
+
+  bool ChessGameHandler::execute_move_on_grid(const Move& move)
+  {
+    // Get piece at start position
+    auto piece = current_grid_.get_piece_at(move.start_pos);
+    if (!piece)
+    {
+      return false;
+    }
+
+    // Handle special moves
+    if (move.flags == SpecialFlags::CASTLE_KINGSIDE || move.flags == SpecialFlags::CASTLE_QUEENSIDE)
+    {
+      return execute_castling(move);
+    }
+    else if (move.flags == SpecialFlags::EN_PASSANT)
+    {
+      return execute_en_passant(move);
+    }
+    else if (move.flags == SpecialFlags::PROMOTION)
+    {
+      return execute_promotion(move);
+    }
+
+    // Regular move
+    return execute_regular_move(move);
+  }
+
+  bool ChessGameHandler::execute_regular_move(const Move& move)
+  {
+    // Clear start position
+    current_grid_.clear_square(move.start_pos);
+    
+    // Set piece at end position
+    auto piece = current_grid_.get_piece_at(move.start_pos);
+    if (piece)
+    {
+      piece->set_position(move.end_pos);
+      current_grid_.add_piece(std::unique_ptr<ChessPiece>(piece));
+    }
+    
+    return true;
+  }
+
+  bool ChessGameHandler::execute_castling(const Move& move)
+  {
+    // TODO: Implement castling logic
+    // This would involve moving both king and rook
+    return execute_regular_move(move);
+  }
+
+  bool ChessGameHandler::execute_en_passant(const Move& move)
+  {
+    // TODO: Implement en passant logic
+    // This would involve capturing the pawn that moved two squares
+    return execute_regular_move(move);
+  }
+
+  bool ChessGameHandler::execute_promotion(const Move& move)
+  {
+    // TODO: Implement promotion logic
+    // This would involve replacing pawn with promotion piece
+    return execute_regular_move(move);
+  }
+
+  void ChessGameHandler::update_game_state()
+  {
+    Color current_color = current_grid_.current_turn;
+    Color opponent_color = (current_color == Color::WHITE) ? Color::BLACK : Color::WHITE;
+    
+    // Check for checkmate
+    if (board_manager_->is_checkmate(current_grid_, opponent_color))
+    {
+      session_.state = GameState::CHECKMATE;
+      return;
+    }
+    
+    // Check for stalemate
+    if (board_manager_->is_stalemate(current_grid_, opponent_color))
+    {
+      session_.state = GameState::STALEMATE;
+      return;
+    }
+    
+    // Check for draw
+    if (board_manager_->is_draw(current_grid_, current_color))
+    {
+      session_.state = GameState::DRAW_INSUFFICIENT_MATERIAL; // Default to insufficient material draw
+      return;
+    }
+    
+    // Game continues
+    session_.state = GameState::ONGOING;
+  }
+
+  char ChessGameHandler::get_piece_display_char(PieceType type, Color color) const
+  {
+    // White pieces: uppercase, Black pieces: lowercase
+    char base_char = ' ';
+    switch (type)
+    {
+      case PieceType::PAWN:   base_char = 'P'; break;
+      case PieceType::KNIGHT: base_char = 'N'; break;
+      case PieceType::BISHOP: base_char = 'B'; break;
+      case PieceType::ROOK:   base_char = 'R'; break;
+      case PieceType::QUEEN:  base_char = 'Q'; break;
+      case PieceType::KING:   base_char = 'K'; break;
+    }
+    
+    return (color == Color::WHITE) ? base_char : static_cast<char>(tolower(base_char));
   }
 
 } // namespace Chess

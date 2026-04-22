@@ -12,8 +12,8 @@
 #ifndef ICHESS_CTU_TRANSLATION_UNIT
 #define ICHESS_CTU_TRANSLATION_UNIT
 
-#include "../cci/include/grid.h"
-#include "../cci/include/move.h"
+#include "grid.h"
+#include "move.h"
 #include <string>
 
 namespace Chess

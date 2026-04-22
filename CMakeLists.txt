@@ -16,16 +16,21 @@ include_directories("cpl/include")
 file(GLOB CPL_SOURCES "cpl/src/*.cpp")
 target_sources(${EXE_NAME} PRIVATE ${CPL_SOURCES})
 
-# Future modular components (Phase 2) - structure ready
-# include_directories("cbm/include")
-# include_directories("ctu/include")
-# include_directories("cgh/include")
+# CGH component support (Phase 3) - now active
+include_directories("cgh/include")
+file(GLOB CGH_SOURCES "cgh/src/*.cpp")
+target_sources(${EXE_NAME} PRIVATE ${CGH_SOURCES})
 
-# file(GLOB CBM_SOURCES "cbm/src/*.cpp")
-# file(GLOB CTU_SOURCES "ctu/src/*.cpp")
-# file(GLOB CGH_SOURCES "cgh/src/*.cpp")
+# CBM component support (Phase 3) - now active  
+include_directories("cbm/include")
+file(GLOB CBM_SOURCES "cbm/src/*.cpp")
+target_sources(${EXE_NAME} PRIVATE ${CBM_SOURCES})
 
-# target_sources(${EXE_NAME} PRIVATE ${CBM_SOURCES} ${CTU_SOURCES} ${CGH_SOURCES})
+# CTU component support (Phase 3) - now active
+include_directories("ctu/include")
+file(GLOB CTU_SOURCES "ctu/src/*.cpp")
+target_sources(${EXE_NAME} PRIVATE ${CTU_SOURCES})
+
 
 # Add tests (leveraging existing test structure)
 add_subdirectory(tests)

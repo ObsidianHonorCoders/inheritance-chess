@@ -10,6 +10,7 @@
 #include "translation_unit.h"
 #include <cctype>
 #include <ctime>
+#include <stdexcept>
 
 namespace Chess
 {

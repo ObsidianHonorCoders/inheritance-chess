@@ -6,31 +6,78 @@
 /// @see       https://github.com/ObsidianHonorCoders/inheritance-chess
 /// @details   Demonstrates basic chess engine functionality including board setup,
 ///            piece creation, and console-based board display using C++ inheritance
-///            and polymorphism principles.
 
 #include <iostream>
 #include <string>
 #include <memory>
 
-#include "cci/include/grid.h"
+#include "cgh/include/game_handler.h"
 
-/// @brief   Main entry point for the Inheritance Chess Engine.
-/// @return  Exit status code (0 for success).
-/// @details Initializes the chess board with the standard starting position.
 int main()
 {
-  Chess::Grid chessGrid;
-  chessGrid.initialize_standard_position();
-
-  std::cout << "====================================" << std::endl;
-  std::cout << "|  Inheritance Chess Engine v0.0   |" << std::endl;
-  std::cout << "====================================" << std::endl;
-  std::cout << "Starting Inheritance Chess!" << std::endl << std::endl;
-  std::cout << "Chess Board successfully created and initialized." << std::endl;
-  std::cout << "All further testing will be conducted via GTest." << std::endl;
-  std::cout << "Communication protocol and usage: TBD." << std::endl << std::endl;
-  std::cout << "Thanks for using our software!" << std::endl;
-  std::cout << "                               - OHC team." << std::endl;
-
+  // Initialize the complete chess game handler with all modules
+  Chess::ChessGameHandler gameHandler;
+  
+  std::cout << "====================================\n";
+  std::cout << "|  Inheritance Chess Engine v0.0   |\n";
+  std::cout << "====================================\n";
+  std::cout << "Starting Inheritance Chess!\n\n";
+  
+  // Start a new game
+  gameHandler.start_new_game();
+  std::cout << "New game started with standard position.\n\n";
+  
+  // Display initial board
+  gameHandler.display_board();
+  
+  // Demonstrate move making
+  std::cout << "\nDemonstrating move execution:\n";
+  std::cout << "Trying move e2-e4...\n";
+  
+  if (gameHandler.make_move("e2e4"))
+  {
+    std::cout << "Move successful!\n";
+    gameHandler.display_board();
+  }
+  else
+  {
+    std::cout << "Move failed!\n";
+  }
+  
+  // Show current FEN
+  std::cout << "\nCurrent FEN: " << gameHandler.get_current_fen() << "\n";
+  
+  // Show game state
+  std::cout << "Game state: ";
+  switch (gameHandler.get_game_state())
+  {
+    case Chess::GameState::ONGOING:
+      std::cout << "Ongoing\n";
+      break;
+    case Chess::GameState::CHECKMATE:
+      std::cout << "Checkmate\n";
+      break;
+    case Chess::GameState::STALEMATE:
+      std::cout << "Stalemate\n";
+      break;
+    case Chess::GameState::DRAW_INSUFFICIENT_MATERIAL:
+    case Chess::GameState::DRAW_THREEFOLD_REPETITION:
+    case Chess::GameState::DRAW_FIFTY_MOVE_RULE:
+      std::cout << "Draw\n";
+      break;
+    default:
+      std::cout << "Unknown\n";
+      break;
+  }
+  
+  // Demonstrate legal moves
+  std::cout << "\nGetting legal moves for current position...\n";
+  auto legalMoves = gameHandler.get_legal_moves();
+  std::cout << "Found " << legalMoves.size() << " legal moves\n";
+  
+  std::cout << "\nThanks for using our software!\n";
+  std::cout << "                               - OHC team.\n";
+  std::cout << "====================================\n";
+  
   return 0;
 }

@@ -12,11 +12,11 @@
 #ifndef ICHESS_CGH_GAME_HANDLER
 #define ICHESS_CGH_GAME_HANDLER
 
-#include "../cci/include/grid.h"
-#include "../cci/include/move.h"
-#include "../cbm/include/board_manager.h"
-#include "../cpl/include/pieces_logic.h"
-#include "../ctu/include/translation_unit.h"
+#include "grid.h"
+#include "move.h"
+#include "board_manager.h"
+#include "pieces_logic.h"
+#include "translation_unit.h"
 #include <chrono>
 #include <memory>
 #include <string>
@@ -77,7 +77,44 @@ namespace Chess
       /// @brief Get time remaining for a color.
       std::chrono::milliseconds get_time_remaining(Color color) const;
 
+      /// @brief Display current board state (adapted from existing Board patterns).
+      void display_board() const;
+
     private:
+      /// @brief Execute a move on the grid.
+      /// @param move Move to execute.
+      /// @return True if move was executed successfully.
+      bool execute_move_on_grid(const Move& move);
+
+      /// @brief Execute a regular move.
+      /// @param move Move to execute.
+      /// @return True if move was executed successfully.
+      bool execute_regular_move(const Move& move);
+
+      /// @brief Execute castling move.
+      /// @param move Castling move to execute.
+      /// @return True if castling was executed successfully.
+      bool execute_castling(const Move& move);
+
+      /// @brief Execute en passant move.
+      /// @param move En passant move to execute.
+      /// @return True if en passant was executed successfully.
+      bool execute_en_passant(const Move& move);
+
+      /// @brief Execute promotion move.
+      /// @param move Promotion move to execute.
+      /// @return True if promotion was executed successfully.
+      bool execute_promotion(const Move& move);
+
+      /// @brief Update game state based on current position.
+      void update_game_state();
+
+      /// @brief Get display character for a piece.
+      /// @param type Type of piece.
+      /// @param color Color of piece.
+      /// @return Character representation.
+      char get_piece_display_char(PieceType type, Color color) const;
+
       std::unique_ptr<ChessBoardManager>    board_manager_;    ///< Board rule enforcement
       std::unique_ptr<ChessPiecesLogic>     pieces_logic_;     ///< Piece move generation
       std::unique_ptr<ChessTranslationUnit> translation_unit_; ///< Notation translation

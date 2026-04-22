@@ -12,8 +12,8 @@
 #ifndef ICHESS_CBM_BOARD_MANAGER
 #define ICHESS_CBM_BOARD_MANAGER
 
-#include "../cci/include/grid.h"
-#include "../cci/include/move.h"
+#include "grid.h"
+#include "move.h"
 #include <vector>
 #include <memory>
 
