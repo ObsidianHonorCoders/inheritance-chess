@@ -40,5 +40,27 @@ target_link_libraries(${EXE_NAME}
     cei
 )
 
-# Add tests
+# Add test options
+option(BUILD_ALL_TESTS "Build all component tests" OFF)
+option(BUILD_CCI_TESTS "Build CCI tests" OFF)
+option(BUILD_CPL_TESTS "Build CPL tests" OFF)
+option(BUILD_CGH_TESTS "Build CGH tests" OFF)
+option(BEI_TESTS "Build CEI tests" OFF)
+option(BUILD_CES_TESTS "Build CES tests" OFF)
+
+# Enable testing if any test option is ON
+if(BUILD_ALL_TESTS OR BUILD_CCI_TESTS OR BUILD_CPL_TESTS OR BUILD_CGH_TESTS OR BUILD_CEI_TESTS OR BUILD_CES_TESTS)
+    enable_testing()
+    
+    # Set all test options to ON if BUILD_ALL_TESTS is ON
+    if(BUILD_ALL_TESTS)
+        set(BUILD_CCI_TESTS ON)
+        set(BUILD_CPL_TESTS ON)
+        set(BUILD_CGH_TESTS ON)
+        set(BUILD_CEI_TESTS ON)
+        set(BUILD_CES_TESTS ON)
+    endif()
+endif()
+
+# Add tests (legacy support)
 add_subdirectory(tests)
