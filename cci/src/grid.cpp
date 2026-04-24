@@ -66,21 +66,19 @@ namespace Chess
   }
 
   /// @brief Get all pieces on the board as a PieceList.
-  /// @return Vector of unique pointers to all pieces on the board.
+  /// @return Vector of raw pointers to all pieces on the board.
   /// @details Adapted from existing Board::pieces pattern using smart pointers.
-  PieceList Grid::get_all_pieces() const
+  std::vector<ChessPiece*> Grid::get_all_pieces() const
   {
-    PieceList result;
+    std::vector<ChessPiece*> result;
     result.reserve(pieces_.size());
     
-    // Create copies of the smart pointers (adapted from existing patterns)
+    // Return raw pointers to pieces (adapted from existing patterns)
     for (const auto& piece : pieces_)
     {
       if (piece)
       {
-        // Note: In Phase 2, this will return actual piece objects
-        // For now, this demonstrates the smart pointer pattern
-        result.push_back(std::unique_ptr<ChessPiece>());
+        result.push_back(piece.get());
       }
     }
     

@@ -28,10 +28,10 @@ namespace Chess
   class Grid;
 
   /// @class ChessPiece::List
-  /// @brief A vector of unique pointers to chess pieces.
-  /// @note  This container owns the memory. Objects are automatically managed
-  ///        by smart pointers to prevent memory leaks. (Adapted from existing Piece::List)
-  using PieceList = std::vector<std::unique_ptr<ChessPiece>>;
+  /// @brief A vector of raw pointers to chess pieces.
+  /// @note  This container holds references to pieces. Memory is managed
+  ///        by the pieces_ member vector. (Adapted from existing Piece::List)
+  using PieceList = std::vector<ChessPiece*>;
 
   /// @class ChessPiece::PositionList
   /// @brief A vector of chess pieces positions. (Adapted from existing Piece::PositionList)
@@ -121,6 +121,12 @@ namespace Chess
       GameFlags flags;                       ///< Castling rights, en passant, halfmove/fullmove counters
 
     public:
+      // Delete copy constructor and assignment operator to prevent copying of unique_ptr vectors
+      Grid() = default;
+      Grid(const Grid&) = delete;
+      Grid& operator=(const Grid&) = delete;
+      Grid(Grid&&) = default;
+      Grid& operator=(Grid&&) = default;
       /// @brief Initialize grid to standard starting position.
       void initialize_standard_position();
 
@@ -158,9 +164,9 @@ namespace Chess
       }
 
       /// @brief Get all pieces on the board as a PieceList.
-      /// @return Vector of unique pointers to all pieces on the board.
+      /// @return Vector of references to all pieces on the board.
       /// @details Adapted from existing Board::pieces pattern.
-      PieceList get_all_pieces() const;
+      std::vector<ChessPiece*> get_all_pieces() const;
 
       /// @brief Add a piece to the board.
       /// @param piece Unique pointer to the piece to add.
@@ -188,7 +194,7 @@ namespace Chess
       void update_piece_properties();
 
     private:
-      PieceList pieces_; ///< List of all pieces on the board (adapted from existing Board::pieces)
+      std::vector<std::unique_ptr<ChessPiece>> pieces_; ///< List of all pieces on the board (adapted from existing Board::pieces)
 
       /// @brief Set piece at a specific position.
       void set_piece(const Position& pos, const std::optional<PieceProperties>& piece)
