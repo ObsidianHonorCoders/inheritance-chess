@@ -96,7 +96,7 @@ file(MAKE_DIRECTORY "${BUILD_DIR}")
 ##    - DETECTED_ARCH:     The detected bit-depth of the host system.
 ##    - NUM_CORES:         The detected available processor cores amount.
 ##    - GENERATOR:         The detected generator candidate.
-include(cmakehelpers/detect_generator.cmake)
+include(cmake/detect_generator.cmake)
 
 ## @section config CMake Configuration
 ## @brief          Runs cmake to generate platform-specific build files
