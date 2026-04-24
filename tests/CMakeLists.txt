@@ -13,11 +13,12 @@ FetchContent_MakeAvailable(googletest)
 
 enable_testing()
 
-# New modular test support (CCI + CPL + CGH)
+# New modular test support (CCI + CPL + CGH + CEI)
 file(GLOB CCI_TEST_SOURCES "../cci/tests/test_*.cpp")
 file(GLOB CPL_TEST_SOURCES "../cpl/tests/test_*.cpp")
 file(GLOB CGH_TEST_SOURCES "../cgh/tests/test_*.cpp")
-add_executable("test_${EXE_NAME}" ${CCI_TEST_SOURCES} ${CPL_TEST_SOURCES} ${CGH_TEST_SOURCES})
+file(GLOB CEI_TEST_SOURCES "../cei/tests/test_*.cpp")
+add_executable("test_${EXE_NAME}" ${CCI_TEST_SOURCES} ${CPL_TEST_SOURCES} ${CGH_TEST_SOURCES} ${CEI_TEST_SOURCES})
 target_link_libraries("test_${EXE_NAME}" gtest gtest_main gmock )
 
 # Include directories for modular components
@@ -26,6 +27,7 @@ target_include_directories("test_${EXE_NAME}" PRIVATE "${CMAKE_SOURCE_DIR}/cpl/i
 target_include_directories("test_${EXE_NAME}" PRIVATE "${CMAKE_SOURCE_DIR}/cgh/include")
 target_include_directories("test_${EXE_NAME}" PRIVATE "${CMAKE_SOURCE_DIR}/cbm/include")
 target_include_directories("test_${EXE_NAME}" PRIVATE "${CMAKE_SOURCE_DIR}/ctu/include")
+target_include_directories("test_${EXE_NAME}" PRIVATE "${CMAKE_SOURCE_DIR}/cei/include")
 
 # Include source files for modular components
 file(GLOB CCI_PROJECT_SOURCES "${CMAKE_SOURCE_DIR}/cci/src/*.cpp")
@@ -33,7 +35,8 @@ file(GLOB CPL_PROJECT_SOURCES "${CMAKE_SOURCE_DIR}/cpl/src/*.cpp")
 file(GLOB CGH_PROJECT_SOURCES "${CMAKE_SOURCE_DIR}/cgh/src/*.cpp")
 file(GLOB CBM_PROJECT_SOURCES "${CMAKE_SOURCE_DIR}/cbm/src/*.cpp")
 file(GLOB CTU_PROJECT_SOURCES "${CMAKE_SOURCE_DIR}/ctu/src/*.cpp")
-target_sources("test_${EXE_NAME}" PRIVATE ${CCI_PROJECT_SOURCES} ${CPL_PROJECT_SOURCES} ${CGH_PROJECT_SOURCES} ${CBM_PROJECT_SOURCES} ${CTU_PROJECT_SOURCES})
+file(GLOB CEI_PROJECT_SOURCES "${CMAKE_SOURCE_DIR}/cei/src/*.cpp")
+target_sources("test_${EXE_NAME}" PRIVATE ${CCI_PROJECT_SOURCES} ${CPL_PROJECT_SOURCES} ${CGH_PROJECT_SOURCES} ${CBM_PROJECT_SOURCES} ${CTU_PROJECT_SOURCES} ${CEI_PROJECT_SOURCES})
 
 # Future modular component tests (Phase 2) - structure ready
 # file(GLOB CBM_TEST_SOURCES "../cbm/tests/test_*.cpp")

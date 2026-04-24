@@ -31,6 +31,11 @@ include_directories("ctu/include")
 file(GLOB CTU_SOURCES "ctu/src/*.cpp")
 target_sources(${EXE_NAME} PRIVATE ${CTU_SOURCES})
 
+# CEI component support (Phase 4) - now active
+include_directories("cei/include")
+file(GLOB CEI_SOURCES "cei/src/*.cpp")
+target_sources(${EXE_NAME} PRIVATE ${CEI_SOURCES})
+
 
 # Add tests (leveraging existing test structure)
 add_subdirectory(tests)

@@ -65,6 +65,11 @@ namespace Chess
       /// @brief Get all legal moves in current position.
       std::vector<Move> get_legal_moves() const;
 
+      /// @brief Get all legal moves for a specific grid.
+      /// @param grid Grid to analyze.
+      /// @return Vector of legal moves.
+      std::vector<Move> get_legal_moves(const Grid& grid) const;
+
       /// @brief Get current game state.
       GameState get_game_state() const;
 
@@ -79,6 +84,10 @@ namespace Chess
 
       /// @brief Display current board state (adapted from existing Board patterns).
       void display_board() const;
+
+      /// @brief Get current grid state.
+      /// @return Reference to current grid.
+      const Grid& get_current_grid() const;
 
     private:
       /// @brief Execute a move on the grid.
