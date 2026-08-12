@@ -2,6 +2,10 @@
 
 <img src="https://raw.githubusercontent.com/Calileus/inheritance-chess/a161e37a0641c0c9bf320bb5716651b8efa9d9cf/.github/inheritance-chess-icon.png" alt="inheritance-chess-icon" width="150" height="105">
 
+## Release v0.0.0
+
+See **[docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md)** for release notes, features, architecture, and testing information.
+
 ## Overview
 
 Inheritance Chess is a modular C++ chess engine organized into focused components for shared board state, piece logic, rule enforcement, notation translation, event dispatch, orchestration, and engine search.

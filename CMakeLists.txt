@@ -3,7 +3,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 add_definitions(-DUNICODE -D_UNICODE)
 
-project(inheritance_chess_project VERSION 1.0.0 LANGUAGES CXX)
+project(inheritance_chess_project VERSION 0.0.0 LANGUAGES CXX)
 
 # Single test ownership model: tests/CMakeLists.txt is the only place where
 # test executables are defined.
