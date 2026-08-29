@@ -255,8 +255,15 @@ All `.cpp` and `.hpp` files **must include a standardized authorship header** at
 Run tests locally using the project's build system. Example (CMake-based):
 
 ```bash
-cmake --build build --target test
-ctest --test-dir build --output-on-failure
+cmake -P cmake/configure_and_build.cmake
+cmake -P cmake/run_tests.cmake
+```
+
+For compatibility wrappers:
+
+```bash
+cmake -P cmake/build_and_run_project.cmake
+cmake -P cmake/build_2p_game_and_run.cmake
 ```
 
 ---
@@ -273,7 +280,7 @@ If CI is flaky, address or document the flakiness in the PR; do not bypass check
 
 ## Licensing
 
-By contributing, you agree that your contributions are licensed under the **MIT License**, consistent with this project.
+By contributing, you agree that your contributions are licensed under the **Apache License 2.0**, consistent with this project.
 
 ---
 
