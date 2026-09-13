@@ -12,7 +12,8 @@ target_sources(ctu PRIVATE
 
 # Include directories
 target_include_directories(ctu PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/chess_translation_unit>
 )
 
 target_include_directories(ctu PRIVATE

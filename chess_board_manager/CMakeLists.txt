@@ -12,7 +12,8 @@ target_sources(cbm PRIVATE
 
 # Include directories
 target_include_directories(cbm PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/chess_board_manager>
 )
 
 # Dependencies

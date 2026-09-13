@@ -28,7 +28,7 @@ jobs:
         if: runner.os != 'Windows'
         run: c++ --version
       - name: Config and Build Script
-        run: cmake -DBUILD_TESTS=ON -DCLEAN_BUILD=ON -P cmake/configure_and_build.cmake
+        run: cmake -DBUILD_TESTING=ON -DCLEAN_BUILD=ON -P cmake/configure_and_build.cmake
       - name: Run Tests Script
         run: cmake -P cmake/run_tests.cmake
       - name: Upload diagnostics on failure
