@@ -13,14 +13,6 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 include(GoogleTest)
 
-# Disable -Werror for gtest to avoid char8_t conversion warnings on macOS
-if(DEFINED CMAKE_CXX_COMPILER_ID)
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
-        target_compile_options(gtest PUBLIC -Wno-error=char-conversion)
-        target_compile_options(gmock PUBLIC -Wno-error=char-conversion)
-    endif()
-endif()
-
 # Explicit test source lists — do NOT use file(GLOB); add new test files here manually.
 set(CCI_TEST_SOURCES
     ../chess_common_interface/tests/test_main.cpp
@@ -77,6 +69,12 @@ add_executable("test_${EXE_NAME}"
     ${CES_TEST_SOURCES}
     ${CEI_TEST_SOURCES}
 )
+
+if(DEFINED CMAKE_CXX_COMPILER_ID)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+        target_compile_options("test_${EXE_NAME}" PRIVATE -Wno-error=character-conversion)
+    endif()
+endif()
 
 # Link with modular libraries
 target_link_libraries("test_${EXE_NAME}" 

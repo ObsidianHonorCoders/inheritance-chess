@@ -85,9 +85,8 @@ TEST_F(GridTest, StandardPositionInitialization)
   EXPECT_EQ(test_grid.current_turn, Chess::Color::WHITE);
   
   // Check corners have rooks in standard position
-  auto white_rook_pos = Chess::Position(0, 0); // a1
-  auto black_rook_pos = Chess::Position(0, 7); // a8
-  
+  // auto white_rook_pos = Chess::Position(0, 0); // a1
+  // auto black_rook_pos = Chess::Position(0, 7); // a8
   // These will work once piece factory is implemented
   // EXPECT_NE(test_grid.get_piece_at(white_rook_pos), nullptr);
   // EXPECT_NE(test_grid.get_piece_at(black_rook_pos), nullptr);
