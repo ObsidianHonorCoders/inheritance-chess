@@ -6,12 +6,20 @@ add_definitions(-DUNICODE -D_UNICODE)
 include(FetchContent)
 set(FETCHCONTENT_BASE_DIR "${CMAKE_BINARY_DIR}/_deps/gtest")
 FetchContent_Declare( googletest
-                      URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+                      URL https://github.com/google/googletest/archive/refs/tags/v1.15.2.zip
                       DOWNLOAD_EXTRACT_TIMESTAMP TRUE
                       EXCLUDE_FROM_ALL )
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 include(GoogleTest)
+
+# Disable -Werror for gtest to avoid char8_t conversion warnings on macOS
+if(DEFINED CMAKE_CXX_COMPILER_ID)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+        target_compile_options(gtest PUBLIC -Wno-error=char-conversion)
+        target_compile_options(gmock PUBLIC -Wno-error=char-conversion)
+    endif()
+endif()
 
 # Explicit test source lists — do NOT use file(GLOB); add new test files here manually.
 set(CCI_TEST_SOURCES

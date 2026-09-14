@@ -8,8 +8,6 @@ on:
 
 jobs:
   build-test-and-run:
-    # REMOVED: The 'if' condition is no longer needed because
-    # we removed the trigger that caused the problem.
     strategy:
       fail-fast: false
       matrix:
@@ -19,6 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           clean: true
+      
       - name: Toolchain preflight
         run: |
           cmake --version
@@ -27,15 +26,18 @@ jobs:
       - name: Compiler preflight (non-Windows)
         if: runner.os != 'Windows'
         run: c++ --version
-      - name: Config and Build Script
+      
+      - name: Configure & Build
         run: cmake -DBUILD_TESTING=ON -DCLEAN_BUILD=ON -P cmake/configure_and_build.cmake
-      - name: Run Tests Script
+      
+      - name: Run Tests
         run: cmake -P cmake/run_tests.cmake
-      - name: Upload diagnostics on failure
+      
+      - name: Upload test results on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: diagnostics-${{ matrix.os }}
+          name: test-results-${{ matrix.os }}
           if-no-files-found: ignore
           path: |
             build/**/Testing/**
