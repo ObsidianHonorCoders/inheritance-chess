@@ -4,21 +4,26 @@
 
 cmake_minimum_required(VERSION 3.28)
 
-option(BUILD_TESTS "Build and run tests" ON)
+option(BUILD_TESTING "Build and run tests" ON)
 option(RUN_APP "Run ichess_runner after build/test" ON)
 option(CLEAN_BUILD "Remove build directory before configuring" ON)
+
+# Backward compatibility for old flag name.
+if(DEFINED BUILD_TESTS)
+    set(BUILD_TESTING ${BUILD_TESTS})
+endif()
 
 message("======= Legacy Wrapper: build_and_run_project.cmake ===========================")
 
 execute_process(
-    COMMAND ${CMAKE_COMMAND} -DCLEAN_BUILD=${CLEAN_BUILD} -DBUILD_TESTS=${BUILD_TESTS} -P "${CMAKE_CURRENT_LIST_DIR}/configure_and_build.cmake"
+    COMMAND ${CMAKE_COMMAND} -DCLEAN_BUILD=${CLEAN_BUILD} -DBUILD_TESTING=${BUILD_TESTING} -P "${CMAKE_CURRENT_LIST_DIR}/configure_and_build.cmake"
     RESULT_VARIABLE BUILD_STAGE_RESULT
 )
 if(NOT BUILD_STAGE_RESULT EQUAL 0)
     message(FATAL_ERROR "Build stage failed with code: ${BUILD_STAGE_RESULT}")
 endif()
 
-if(BUILD_TESTS)
+if(BUILD_TESTING)
     execute_process(
         COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_LIST_DIR}/run_tests.cmake"
         RESULT_VARIABLE TEST_STAGE_RESULT
@@ -27,7 +32,7 @@ if(BUILD_TESTS)
         message(FATAL_ERROR "Test stage failed with code: ${TEST_STAGE_RESULT}")
     endif()
 else()
-    message(STATUS "BUILD_TESTS=OFF, skipping test stage")
+    message(STATUS "BUILD_TESTING=OFF, skipping test stage")
 endif()
 
 if(RUN_APP)

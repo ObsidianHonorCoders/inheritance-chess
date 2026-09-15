@@ -1,0 +1,59 @@
+# Pre-commit hooks for code quality
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: check-case-conflict
+      - id: check-symlinks
+
+  - repo: https://github.com/cheshirekow/cmake-format-precommit
+    rev: v0.6.13
+    hooks:
+      - id: cmake-format
+        args: ["--in-place"]
+        files: ^(CMakeLists\.txt|.*\.cmake)$
+      - id: cmake-lint
+        args: ["--check", "CMakeLists.txt"]
+        files: ^(CMakeLists\.txt|.*\.cmake)$
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: ["--severity=warning"]
+
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.42.0
+    hooks:
+      - id: markdownlint
+        args: ["--fix"]
+        files: \.md$
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.3.0
+    hooks:
+      - id: codespell
+        args:
+          [
+            "--skip=*.png,*.jpg,*.jpeg,*.gif,*.svg,*.ico",
+            "--ignore-words-list=ohc",
+          ]
+        files: \.(md|txt|rst|cmake|hpp|cpp|h|c)$
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".github/.secrets.baseline"]
+        exclude: package-lock\.json$|^\.github/\.secrets\.baseline$

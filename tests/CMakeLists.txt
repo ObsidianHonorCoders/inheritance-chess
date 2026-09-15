@@ -3,10 +3,14 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 add_definitions(-DUNICODE -D_UNICODE)
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    add_compile_options(-Wno-error=character-conversion)
+endif()
+
 include(FetchContent)
 set(FETCHCONTENT_BASE_DIR "${CMAKE_BINARY_DIR}/_deps/gtest")
 FetchContent_Declare( googletest
-                      URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+                      URL https://github.com/google/googletest/archive/refs/tags/v1.15.2.zip
                       DOWNLOAD_EXTRACT_TIMESTAMP TRUE
                       EXCLUDE_FROM_ALL )
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
