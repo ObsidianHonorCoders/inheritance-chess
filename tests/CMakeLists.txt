@@ -3,6 +3,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 add_definitions(-DUNICODE -D_UNICODE)
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    add_compile_options(-Wno-error=character-conversion)
+endif()
+
 include(FetchContent)
 set(FETCHCONTENT_BASE_DIR "${CMAKE_BINARY_DIR}/_deps/gtest")
 FetchContent_Declare( googletest
@@ -69,12 +73,6 @@ add_executable("test_${EXE_NAME}"
     ${CES_TEST_SOURCES}
     ${CEI_TEST_SOURCES}
 )
-
-if(DEFINED CMAKE_CXX_COMPILER_ID)
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-        target_compile_options("test_${EXE_NAME}" PRIVATE -Wno-error=character-conversion)
-    endif()
-endif()
 
 # Link with modular libraries
 target_link_libraries("test_${EXE_NAME}" 
