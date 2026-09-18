@@ -19,7 +19,8 @@ target_sources(cpl PRIVATE
 
 # Include directories
 target_include_directories(cpl PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/chess_pieces_logic>
 )
 
 # Dependencies

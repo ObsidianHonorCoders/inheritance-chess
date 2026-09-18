@@ -28,5 +28,9 @@
 - [ ] Code follows clang format.
 - [ ] No new compiler warnings.
 - [ ] Updated documentation.
+- [ ] No `file(GLOB ...)` added for production or test source ownership.
+- [ ] Governance docs are not duplicated locally (org `.github` ownership preserved).
+- [ ] Documentation reflects current repository status only.
+- [ ] Historical notes (if any) are only in `CHANGELOG.md` and remain brief.
 
 _Calileus Chess Pull Request Template V 1.0_

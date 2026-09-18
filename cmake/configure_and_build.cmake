@@ -9,7 +9,12 @@ set(EXE_NAME "ichess_runner")
 set(ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}/..")
 set(BUILD_DIR "${ROOT_DIR}/build")
 option(CLEAN_BUILD "Remove build directory before configuring" ON)
-option(BUILD_TESTS "Build centralized tests target during configure/build" ON)
+option(BUILD_TESTING "Build centralized tests target during configure/build" ON)
+
+# Backward compatibility for old flag name.
+if(DEFINED BUILD_TESTS)
+    set(BUILD_TESTING ${BUILD_TESTS})
+endif()
 
 if(CLEAN_BUILD AND EXISTS "${BUILD_DIR}")
     message(STATUS "Cleaning: Removing old build directory...")
@@ -39,7 +44,7 @@ set(CONFIG_COMMAND
     -B ${BUILD_DIR}
     -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     -DEXE_NAME=${EXE_NAME}
-    -DENABLE_TESTS=${BUILD_TESTS}
+    -DBUILD_TESTING=${BUILD_TESTING}
 )
 if(NOT "${GENERATOR}" STREQUAL "")
     list(APPEND CONFIG_COMMAND -G "${GENERATOR}")

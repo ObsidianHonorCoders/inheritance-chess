@@ -12,7 +12,7 @@
       "binaryDir": "${sourceDir}/build/dev",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "ENABLE_TESTS": "ON",
+        "BUILD_TESTING": "ON",
         "EXE_NAME": "ichess_runner"
       }
     },
@@ -22,7 +22,7 @@
       "binaryDir": "${sourceDir}/build/ci",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "ENABLE_TESTS": "ON",
+        "BUILD_TESTING": "ON",
         "EXE_NAME": "ichess_runner"
       }
     }
