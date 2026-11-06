@@ -21,6 +21,8 @@ This document describes the current architecture of `inheritance-chess`.
 - `backend/` is reserved for the future service/API layer.
 - `frontend/` is reserved for the future web client.
 
+The proposed HTTP routes, security requirements, and deployment topology are defined in [SERVICE_CONTRACT.md](SERVICE_CONTRACT.md) and [backend/openapi.yaml](../backend/openapi.yaml).
+
 ## Runtime orchestration
 - `ichess_runner` and `ichess_2p` both orchestrate gameplay through `domain/core/chess_game_handler`.
 - Rule validation and legal move control come from board/pieces modules.

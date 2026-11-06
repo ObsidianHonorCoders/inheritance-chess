@@ -30,6 +30,7 @@ This documentation describes the current state of the repository.
 
 ## Docs Set
 - `ARCHITECTURE.md`
+- `SERVICE_CONTRACT.md`
 - `CMAKE_CONFIGURATION.md`
 - `TESTING.md`
 - `NAMING_CONVENTIONS.md`
