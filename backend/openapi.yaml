@@ -1,0 +1,658 @@
+openapi: 3.1.0
+info:
+  title: Inheritance Chess API
+  version: 1.0.0
+  description: Versioned game service contract. Security and deployment requirements are in docs/SERVICE_CONTRACT.md.
+servers:
+  - url: https://chess.example.com
+    description: Replace with the deployed same-origin hostname.
+security:
+  - SessionCookie: []
+paths:
+  /api/v1/health/live:
+    get:
+      operationId: getLiveness
+      summary: Process liveness probe
+      security: []
+      responses:
+        '200':
+          description: The process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/v1/health/ready:
+    get:
+      operationId: getReadiness
+      summary: Dependency readiness probe
+      security: []
+      responses:
+        '200':
+          description: The service can accept traffic.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: A required dependency is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/session:
+    get:
+      operationId: getSession
+      summary: Get the authenticated session and CSRF token
+      description: Requires an established server-side session. The CSRF token is not an authentication credential and must be sent only in the X-CSRF-Token header.
+      responses:
+        '200':
+          description: Current authenticated session metadata.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/games:
+    post:
+      operationId: createGame
+      summary: Create a game and assign the caller to White
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Opaque client-generated key. Reuse with the same request to safely retry creation.
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGameRequest'
+      responses:
+        '201':
+          description: Game created.
+          headers:
+            Location:
+              schema:
+                type: string
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameSnapshot'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/games/{gameId}:
+    parameters:
+      - $ref: '#/components/parameters/GameId'
+    get:
+      operationId: getGame
+      summary: Get the current game snapshot
+      responses:
+        '200':
+          description: Current game state for an authorized participant.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: joinGame
+      summary: Join an unoccupied seat as Black
+      description: Repeating a join by the same participant returns the current snapshot; occupied games cannot be joined.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: The caller joined or already occupies Black.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/games/{gameId}/legal-moves:
+    parameters:
+      - $ref: '#/components/parameters/GameId'
+    get:
+      operationId: getLegalMoves
+      summary: Get legal moves for the current position
+      responses:
+        '200':
+          description: Legal moves and version for the current position.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [version, legalMoves]
+                properties:
+                  version:
+                    type: integer
+                    minimum: 1
+                  legalMoves:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LegalMove'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/games/{gameId}/moves:
+    parameters:
+      - $ref: '#/components/parameters/GameId'
+    get:
+      operationId: getMoveHistory
+      summary: Read paginated move history
+      parameters:
+        - name: afterPly
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
+      responses:
+        '200':
+          description: Move records after the requested ply.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: submitMove
+      summary: Submit a legal move
+      description: Accepts lowercase UCI coordinates, including a promotion suffix such as e7e8q. The server validates legality.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitMoveRequest'
+      responses:
+        '200':
+          description: Move applied atomically; response is the new snapshot.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameSnapshot'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+  /api/v1/games/{gameId}/resign:
+    post:
+      operationId: resignGame
+      summary: Resign for the caller's seat
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: Game resigned; response is the new snapshot.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/games/{gameId}/draw-offers:
+    post:
+      operationId: offerDraw
+      summary: Offer a draw for the caller's seat
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: Draw offer recorded; response is the new snapshot.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/games/{gameId}/draw-offers/accept:
+    post:
+      operationId: acceptDraw
+      summary: Accept the opponent's active draw offer
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: Draw accepted; response is the new snapshot.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-ichess_session
+      description: Server-issued, Secure, HttpOnly, SameSite session cookie. State-changing requests also require X-CSRF-Token.
+  parameters:
+    GameId:
+      name: gameId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 22
+        maxLength: 64
+        pattern: '^[A-Za-z0-9_-]+$'
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Strong ETag returned by GET or the preceding mutation, for example "7".
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Reuse only when retrying the same logical request after an uncertain result.
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: Session-bound anti-CSRF token obtained from GET /api/v1/session.
+      schema:
+        type: string
+        minLength: 32
+        maxLength: 256
+  headers:
+    ETag:
+      description: Strong validator for the returned game version.
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Malformed request or missing required precondition.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Authentication is required or the session is invalid.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: CSRF or origin check failed. Inaccessible games are returned as 404.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Game does not exist or is not visible to the caller.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: The game state does not allow this operation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PreconditionFailed:
+      description: If-Match does not match the current game version; fetch the latest snapshot.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PreconditionRequired:
+      description: Required If-Match header is missing.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Request is well-formed but the FEN or move is invalid for this game.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    RateLimited:
+      description: Request limit reached; honor Retry-After when present.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PayloadTooLarge:
+      description: Request body exceeds the configured limit.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    SessionInfo:
+      type: object
+      additionalProperties: false
+      required: [csrfToken]
+      properties:
+        csrfToken:
+          type: string
+          minLength: 32
+          maxLength: 256
+    CreateGameRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        initialFen:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Omit to use the standard starting position.
+        timeControl:
+          $ref: '#/components/schemas/TimeControl'
+    TimeControl:
+      type: object
+      additionalProperties: false
+      required: [initialMs]
+      properties:
+        initialMs:
+          type: integer
+          minimum: 0
+          maximum: 86400000
+        incrementMs:
+          type: integer
+          minimum: 0
+          maximum: 3600000
+          default: 0
+    SubmitMoveRequest:
+      type: object
+      additionalProperties: false
+      required: [uci]
+      properties:
+        uci:
+          type: string
+          pattern: '^[a-h][1-8][a-h][1-8][qrbn]?$'
+    GameSnapshot:
+      type: object
+      additionalProperties: false
+      required: [gameId, version, fen, sideToMove, status, legalMoves, moveCount, viewerSeat, players, clock, serverTime]
+      properties:
+        gameId:
+          type: string
+          minLength: 22
+          maxLength: 64
+          pattern: '^[A-Za-z0-9_-]+$'
+        version:
+          type: integer
+          minimum: 1
+        fen:
+          type: string
+          maxLength: 128
+        sideToMove:
+          type: string
+          enum: [white, black]
+        status:
+          type: string
+          enum: [ongoing, checkmate, stalemate, draw_insufficient_material, draw_threefold_repetition, draw_fifty_move_rule, draw_by_agreement, white_resigned, black_resigned, white_timeout, black_timeout]
+        legalMoves:
+          type: array
+          items:
+            $ref: '#/components/schemas/LegalMove'
+        moveCount:
+          type: integer
+          minimum: 0
+        viewerSeat:
+          type: string
+          enum: [white, black]
+        players:
+          type: object
+          additionalProperties: false
+          required: [white, black]
+          properties:
+            white:
+              $ref: '#/components/schemas/Player'
+            black:
+              oneOf:
+                - $ref: '#/components/schemas/Player'
+                - type: 'null'
+        clock:
+          oneOf:
+            - $ref: '#/components/schemas/ClockSnapshot'
+            - type: 'null'
+        serverTime:
+          type: string
+          format: date-time
+    LegalMove:
+      type: object
+      additionalProperties: false
+      required: [uci, san]
+      properties:
+        uci:
+          type: string
+        san:
+          type: string
+    Player:
+      type: object
+      additionalProperties: false
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          maxLength: 80
+    ClockSnapshot:
+      type: object
+      additionalProperties: false
+      required: [whiteRemainingMs, blackRemainingMs, runningColor, incrementMs]
+      properties:
+        whiteRemainingMs:
+          type: integer
+          minimum: 0
+        blackRemainingMs:
+          type: integer
+          minimum: 0
+        runningColor:
+          oneOf:
+            - type: string
+              enum: [white, black]
+            - type: 'null'
+        incrementMs:
+          type: integer
+          minimum: 0
+    MovePage:
+      type: object
+      additionalProperties: false
+      required: [moves]
+      properties:
+        moves:
+          type: array
+          items:
+            $ref: '#/components/schemas/MoveRecord'
+        nextAfterPly:
+          oneOf:
+            - type: integer
+            - type: 'null'
+    MoveRecord:
+      type: object
+      additionalProperties: false
+      required: [ply, uci, san]
+      properties:
+        ply:
+          type: integer
+          minimum: 1
+        uci:
+          type: string
+        san:
+          type: string
+    Problem:
+      type: object
+      description: RFC 9457 Problem Details response.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference
+        code:
+          type: string

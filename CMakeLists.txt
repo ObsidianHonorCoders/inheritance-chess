@@ -49,16 +49,20 @@ else()
 endif()
 
 # Add subdirectories for each component
-add_subdirectory(chess_common_interface)
-add_subdirectory(chess_pieces_logic)
-add_subdirectory(chess_board_manager)
-add_subdirectory(chess_translation_unit)
-add_subdirectory(chess_event_system)
-add_subdirectory(chess_game_handler)
-add_subdirectory(chess_engine_interface)
+add_subdirectory(domain/core/chess_common_interface)
+add_subdirectory(domain/core/chess_pieces_logic)
+add_subdirectory(domain/core/chess_board_manager)
+add_subdirectory(domain/core/chess_translation_unit)
+add_subdirectory(domain/core/chess_event_system)
+add_subdirectory(domain/core/chess_game_handler)
+add_subdirectory(domain/core/chess_engine_interface)
+option(ICHESS_BUILD_BACKEND "Build the HTTP backend adapter (fetches cpp-httplib and nlohmann_json)" ON)
+if(ICHESS_BUILD_BACKEND)
+    add_subdirectory(backend)
+endif()
 
 # Main executable
-add_executable(${EXE_NAME} chess_game_handler/src/ichess_runner.cpp)
+add_executable(${EXE_NAME} domain/core/chess_game_handler/src/ichess_runner.cpp)
 
 # Link main executable with all component libraries
 target_link_libraries(${EXE_NAME} PRIVATE
@@ -72,7 +76,7 @@ target_link_libraries(${EXE_NAME} PRIVATE
 )
 
 # Two-player console game (always built alongside the main executable)
-add_executable(ichess_2p chess_game_handler/src/2p_game.cpp)
+add_executable(ichess_2p domain/core/chess_game_handler/src/2p_game.cpp)
 target_link_libraries(ichess_2p PRIVATE
     cci
     cpl
@@ -110,49 +114,49 @@ install(
 )
 
 install(
-    DIRECTORY chess_common_interface/include/
+    DIRECTORY domain/core/chess_common_interface/include/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/chess_common_interface
     FILES_MATCHING
     PATTERN "*.hpp"
 )
 
 install(
-    DIRECTORY chess_pieces_logic/include/
+    DIRECTORY domain/core/chess_pieces_logic/include/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/chess_pieces_logic
     FILES_MATCHING
     PATTERN "*.hpp"
 )
 
 install(
-    DIRECTORY chess_board_manager/include/
+    DIRECTORY domain/core/chess_board_manager/include/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/chess_board_manager
     FILES_MATCHING
     PATTERN "*.hpp"
 )
 
 install(
-    DIRECTORY chess_translation_unit/include/
+    DIRECTORY domain/core/chess_translation_unit/include/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/chess_translation_unit
     FILES_MATCHING
     PATTERN "*.hpp"
 )
 
 install(
-    DIRECTORY chess_event_system/include/
+    DIRECTORY domain/core/chess_event_system/include/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/chess_event_system
     FILES_MATCHING
     PATTERN "*.hpp"
 )
 
 install(
-    DIRECTORY chess_game_handler/include/
+    DIRECTORY domain/core/chess_game_handler/include/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/chess_game_handler
     FILES_MATCHING
     PATTERN "*.hpp"
 )
 
 install(
-    DIRECTORY chess_engine_interface/include/
+    DIRECTORY domain/core/chess_engine_interface/include/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/chess_engine_interface
     FILES_MATCHING
     PATTERN "*.hpp"

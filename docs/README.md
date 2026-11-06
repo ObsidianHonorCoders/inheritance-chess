@@ -17,19 +17,21 @@ This documentation describes the current state of the repository.
   - `ctest --preset dev-test --output-on-failure`
 
 ## Component Docs
-- `chess_common_interface/README.md`
-- `chess_pieces_logic/README.md`
-- `chess_board_manager/README.md`
-- `chess_translation_unit/README.md`
-- `chess_event_system/README.md`
-- `chess_game_handler/README.md`
-- `chess_engine_interface/README.md`
+- `../backend/README.md`
+- `../domain/core/chess_common_interface/README.md`
+- `../domain/core/chess_pieces_logic/README.md`
+- `../domain/core/chess_board_manager/README.md`
+- `../domain/core/chess_translation_unit/README.md`
+- `../domain/core/chess_event_system/README.md`
+- `../domain/core/chess_game_handler/README.md`
+- `../domain/core/chess_engine_interface/README.md`
 
 ## Project Workflow
 - Kanban and planning conventions: `docs/kanban.md`
 
 ## Docs Set
 - `ARCHITECTURE.md`
+- `SERVICE_CONTRACT.md`
 - `CMAKE_CONFIGURATION.md`
 - `TESTING.md`
 - `NAMING_CONVENTIONS.md`

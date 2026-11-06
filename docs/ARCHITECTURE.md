@@ -16,11 +16,15 @@ This document describes the current architecture of `inheritance-chess`.
   - `ichess_runner`
   - `ichess_2p`
 
-## Approved structure exception
-This repository intentionally keeps a multi-module layout instead of a single root `include/` + `src/` project layout.
+## Repository boundaries
+- `domain/core/` contains the existing C++ chess modules and console entry points.
+- `backend/` contains the C++ HTTP adapter and provider interfaces; concrete authentication and durable game-application implementations remain to be supplied.
+- `frontend/` is reserved for the future web client.
+
+The proposed HTTP routes, security requirements, and deployment topology are defined in [SERVICE_CONTRACT.md](SERVICE_CONTRACT.md) and [backend/openapi.yaml](../backend/openapi.yaml).
 
 ## Runtime orchestration
-- `ichess_runner` and `ichess_2p` both orchestrate gameplay through `chess_game_handler`.
+- `ichess_runner` and `ichess_2p` both orchestrate gameplay through `domain/core/chess_game_handler`.
 - Rule validation and legal move control come from board/pieces modules.
 - Translation, eventing, and engine behavior are composed through module interfaces.
 

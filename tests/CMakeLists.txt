@@ -19,50 +19,57 @@ include(GoogleTest)
 
 # Explicit test source lists — do NOT use file(GLOB); add new test files here manually.
 set(CCI_TEST_SOURCES
-    ../chess_common_interface/tests/test_main.cpp
-    ../chess_common_interface/tests/test_chess_types.cpp
-    ../chess_common_interface/tests/test_grid.cpp
-    ../chess_common_interface/tests/test_grid_adapted.cpp
-    ../chess_common_interface/tests/test_move.cpp
-    ../chess_common_interface/tests/test_piece_factory.cpp
-    ../chess_common_interface/tests/test_position.cpp
+    ../domain/core/chess_common_interface/tests/test_main.cpp
+    ../domain/core/chess_common_interface/tests/test_chess_types.cpp
+    ../domain/core/chess_common_interface/tests/test_grid.cpp
+    ../domain/core/chess_common_interface/tests/test_grid_adapted.cpp
+    ../domain/core/chess_common_interface/tests/test_move.cpp
+    ../domain/core/chess_common_interface/tests/test_piece_factory.cpp
+    ../domain/core/chess_common_interface/tests/test_position.cpp
 )
 
 set(CPL_TEST_SOURCES
-    ../chess_pieces_logic/tests/test_bishop.cpp
-    ../chess_pieces_logic/tests/test_chess_pawn.cpp
-    ../chess_pieces_logic/tests/test_king.cpp
-    ../chess_pieces_logic/tests/test_knight.cpp
-    ../chess_pieces_logic/tests/test_pawn.cpp
-    ../chess_pieces_logic/tests/test_pieces_logic.cpp
-    ../chess_pieces_logic/tests/test_properties_integration.cpp
-    ../chess_pieces_logic/tests/test_queen.cpp
-    ../chess_pieces_logic/tests/test_rook.cpp
+    ../domain/core/chess_pieces_logic/tests/test_bishop.cpp
+    ../domain/core/chess_pieces_logic/tests/test_chess_pawn.cpp
+    ../domain/core/chess_pieces_logic/tests/test_king.cpp
+    ../domain/core/chess_pieces_logic/tests/test_knight.cpp
+    ../domain/core/chess_pieces_logic/tests/test_pawn.cpp
+    ../domain/core/chess_pieces_logic/tests/test_pieces_logic.cpp
+    ../domain/core/chess_pieces_logic/tests/test_properties_integration.cpp
+    ../domain/core/chess_pieces_logic/tests/test_queen.cpp
+    ../domain/core/chess_pieces_logic/tests/test_rook.cpp
 )
 
 set(CTU_TEST_SOURCES
-    ../chess_translation_unit/tests/test_fen_parsing.cpp
-    ../chess_translation_unit/tests/test_translation_unit.cpp
+    ../domain/core/chess_translation_unit/tests/test_fen_parsing.cpp
+    ../domain/core/chess_translation_unit/tests/test_translation_unit.cpp
 )
 
 set(CBM_TEST_SOURCES
-    ../chess_board_manager/tests/test_board_manager.cpp
-    ../chess_board_manager/tests/test_validation.cpp
+    ../domain/core/chess_board_manager/tests/test_board_manager.cpp
+    ../domain/core/chess_board_manager/tests/test_validation.cpp
 )
 
 set(CGH_TEST_SOURCES
-    ../chess_game_handler/tests/test_game_handler.cpp
-    ../chess_game_handler/tests/test_integration.cpp
-    ../chess_game_handler/tests/test_performance.cpp
+    ../domain/core/chess_game_handler/tests/test_game_handler.cpp
+    ../domain/core/chess_game_handler/tests/test_integration.cpp
+    ../domain/core/chess_game_handler/tests/test_performance.cpp
 )
 
 set(CES_TEST_SOURCES
-    ../chess_event_system/tests/test_event_system.cpp
+    ../domain/core/chess_event_system/tests/test_event_system.cpp
 )
 
 set(CEI_TEST_SOURCES
-    ../chess_engine_interface/tests/test_chess_engine.cpp
+    ../domain/core/chess_engine_interface/tests/test_chess_engine.cpp
 )
+
+set(BACKEND_TEST_SOURCES)
+set(BACKEND_TEST_LIBS)
+if(ICHESS_BUILD_BACKEND)
+    set(BACKEND_TEST_SOURCES ../backend/tests/test_http_api.cpp)
+    set(BACKEND_TEST_LIBS ichess_backend)
+endif()
 
 add_executable("test_${EXE_NAME}"
     ${CCI_TEST_SOURCES}
@@ -72,6 +79,7 @@ add_executable("test_${EXE_NAME}"
     ${CGH_TEST_SOURCES}
     ${CES_TEST_SOURCES}
     ${CEI_TEST_SOURCES}
+    ${BACKEND_TEST_SOURCES}
 )
 
 # Link with modular libraries
@@ -86,17 +94,18 @@ target_link_libraries("test_${EXE_NAME}"
     ces
     cgh
     cei
+    ${BACKEND_TEST_LIBS}
 )
 
 # Include directories for modular components
 target_include_directories("test_${EXE_NAME}" PRIVATE 
-    "${CMAKE_SOURCE_DIR}/chess_common_interface/include"
-    "${CMAKE_SOURCE_DIR}/chess_pieces_logic/include"
-    "${CMAKE_SOURCE_DIR}/chess_game_handler/include"
-    "${CMAKE_SOURCE_DIR}/chess_board_manager/include"
-    "${CMAKE_SOURCE_DIR}/chess_translation_unit/include"
-    "${CMAKE_SOURCE_DIR}/chess_event_system/include"
-    "${CMAKE_SOURCE_DIR}/chess_engine_interface/include"
+    "${CMAKE_SOURCE_DIR}/domain/core/chess_common_interface/include"
+    "${CMAKE_SOURCE_DIR}/domain/core/chess_pieces_logic/include"
+    "${CMAKE_SOURCE_DIR}/domain/core/chess_game_handler/include"
+    "${CMAKE_SOURCE_DIR}/domain/core/chess_board_manager/include"
+    "${CMAKE_SOURCE_DIR}/domain/core/chess_translation_unit/include"
+    "${CMAKE_SOURCE_DIR}/domain/core/chess_event_system/include"
+    "${CMAKE_SOURCE_DIR}/domain/core/chess_engine_interface/include"
 )
 
 gtest_discover_tests("test_${EXE_NAME}"
