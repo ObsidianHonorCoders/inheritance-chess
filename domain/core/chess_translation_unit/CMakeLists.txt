@@ -17,10 +17,10 @@ target_include_directories(ctu PUBLIC
 )
 
 target_include_directories(ctu PRIVATE
-    ${CMAKE_SOURCE_DIR}/chess_game_handler/include
-    ${CMAKE_SOURCE_DIR}/chess_engine_interface/include
-    ${CMAKE_SOURCE_DIR}/chess_pieces_logic/include
-    ${CMAKE_SOURCE_DIR}/chess_event_system/include
+    ${CMAKE_SOURCE_DIR}/domain/core/chess_game_handler/include
+    ${CMAKE_SOURCE_DIR}/domain/core/chess_engine_interface/include
+    ${CMAKE_SOURCE_DIR}/domain/core/chess_pieces_logic/include
+    ${CMAKE_SOURCE_DIR}/domain/core/chess_event_system/include
 )
 
 # Dependencies

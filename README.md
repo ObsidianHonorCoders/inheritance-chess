@@ -21,18 +21,18 @@ Inheritance Chess is a modular C++ chess engine organized into focused component
 
 ## Component Architecture
 
-- `chess_common_interface` (CCI): shared types, `Grid`, `Move`, `Position`, apply/undo state
-- `chess_pieces_logic` (CPL): raw piece move generation and attack detection
-- `chess_board_manager` (CBM): legality filtering, check/mate/stalemate, draw checks
-- `chess_translation_unit` (CTU): FEN/SAN/PGN/protocol translation
-- `chess_event_system` (CES): event subscription and emission
-- `chess_game_handler` (CGH): orchestration facade and game lifecycle control
-- `chess_engine_interface` (CEI): search and evaluation engine
+- `domain/core/chess_common_interface` (CCI): shared types, `Grid`, `Move`, `Position`, apply/undo state
+- `domain/core/chess_pieces_logic` (CPL): raw piece move generation and attack detection
+- `domain/core/chess_board_manager` (CBM): legality filtering, check/mate/stalemate, draw checks
+- `domain/core/chess_translation_unit` (CTU): FEN/SAN/PGN/protocol translation
+- `domain/core/chess_event_system` (CES): event subscription and emission
+- `domain/core/chess_game_handler` (CGH): orchestration facade and game lifecycle control
+- `domain/core/chess_engine_interface` (CEI): search and evaluation engine
 
 ## Executable Entry Points
 
-- `chess_game_handler/src/ichess_runner.cpp`: interactive runner executable (`ichess_runner`)
-- `chess_game_handler/src/2p_game.cpp`: two-player console executable (`ichess_2p`)
+- `domain/core/chess_game_handler/src/ichess_runner.cpp`: interactive runner executable (`ichess_runner`)
+- `domain/core/chess_game_handler/src/2p_game.cpp`: two-player console executable (`ichess_2p`)
 
 ## Build and Run
 
@@ -58,13 +58,17 @@ cmake -P cmake/build_2p_game_and_run.cmake
 
 ```
 inheritance-chess/
-	chess_common_interface/
-	chess_pieces_logic/
-	chess_board_manager/
-	chess_translation_unit/
-	chess_event_system/
-	chess_game_handler/
-	chess_engine_interface/
+	domain/
+		core/
+			chess_common_interface/
+			chess_pieces_logic/
+			chess_board_manager/
+			chess_translation_unit/
+			chess_event_system/
+			chess_game_handler/
+			chess_engine_interface/
+	backend/
+	frontend/
 	cmake/
 	docs/
 	tests/
