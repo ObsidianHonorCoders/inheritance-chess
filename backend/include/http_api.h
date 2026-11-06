@@ -17,6 +17,7 @@ namespace Chess::Backend
       std::time_t write_timeout_seconds = 10;
   };
 
+  // The route handlers keep references to authenticator and application; both must outlive the server.
   void register_http_api(httplib::Server& server,
                          const IRequestAuthenticator& authenticator,
                          IGameApplication& application,

@@ -64,9 +64,12 @@ set(CEI_TEST_SOURCES
     ../domain/core/chess_engine_interface/tests/test_chess_engine.cpp
 )
 
-set(BACKEND_TEST_SOURCES
-    ../backend/tests/test_http_api.cpp
-)
+set(BACKEND_TEST_SOURCES)
+set(BACKEND_TEST_LIBS)
+if(ICHESS_BUILD_BACKEND)
+    set(BACKEND_TEST_SOURCES ../backend/tests/test_http_api.cpp)
+    set(BACKEND_TEST_LIBS ichess_backend)
+endif()
 
 add_executable("test_${EXE_NAME}"
     ${CCI_TEST_SOURCES}
@@ -91,7 +94,7 @@ target_link_libraries("test_${EXE_NAME}"
     ces
     cgh
     cei
-    ichess_backend
+    ${BACKEND_TEST_LIBS}
 )
 
 # Include directories for modular components

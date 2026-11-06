@@ -301,7 +301,8 @@ namespace Chess::Backend
 
     bool valid_game_id(std::string_view game_id);
 
-    void write_snapshot_result(httplib::Response& response, Result<GameSnapshot> result, int success_status)
+    void write_snapshot_result(httplib::Response& response, Result<GameSnapshot> result, int success_status,
+                               bool set_location = false)
     {
       if (std::holds_alternative<ApplicationError>(result))
       {
@@ -314,6 +315,10 @@ namespace Chess::Backend
         write_problem(response, 500, "invalid_application_response", "Internal Server Error",
                       "The request could not be completed.");
         return;
+      }
+      if (set_location)
+      {
+        response.set_header("Location", "/api/v1/games/" + game.game_id);
       }
       response.set_header("ETag", "\"" + std::to_string(game.version) + "\"");
       write_json(response, success_status, to_json(game));
@@ -482,20 +487,7 @@ namespace Chess::Backend
 
       const std::string key = request.get_header_value("Idempotency-Key");
       auto result = application.create_game(principal, command, key);
-      if (std::holds_alternative<ApplicationError>(result))
-      {
-        write_problem(response, std::get<ApplicationError>(result));
-        return;
-      }
-      const auto& game = std::get<GameSnapshot>(result);
-      if (!valid_game_id(game.game_id) || game.version == 0)
-      {
-        write_problem(response, 500, "invalid_application_response", "Internal Server Error",
-                      "The request could not be completed.");
-        return;
-      }
-      response.set_header("Location", "/api/v1/games/" + game.game_id);
-      write_snapshot_result(response, std::move(result), 201);
+      write_snapshot_result(response, std::move(result), 201, true);
     });
 
     const std::string game_route = R"(/api/v1/games/([A-Za-z0-9_-]{22,64}))";
@@ -554,14 +546,17 @@ namespace Chess::Backend
       }
       std::uint64_t after_ply = 0;
       std::uint64_t limit = 100;
-      if (!parse_unsigned_query(request, "afterPly", 0, std::numeric_limits<std::uint64_t>::max(), response, after_ply)
-          || !parse_unsigned_query(request, "limit", 100, std::min(config.max_history_page_size, std::size_t{200}), response, limit)
-          || limit == 0)
+      const bool after_ply_ok =
+          parse_unsigned_query(request, "afterPly", 0, std::numeric_limits<std::uint64_t>::max(), response, after_ply);
+      const bool limit_ok = after_ply_ok
+          && parse_unsigned_query(request, "limit", 100, std::min(config.max_history_page_size, std::size_t{200}), response, limit);
+      if (!after_ply_ok || !limit_ok)
       {
-        if (response.status == 200)
-        {
-          write_problem(response, 400, "invalid_query", "Bad Request", "A query parameter is invalid.");
-        }
+        return; // error already written by parse_unsigned_query
+      }
+      if (limit == 0)
+      {
+        write_problem(response, 400, "invalid_query", "Bad Request", "A query parameter is invalid.");
         return;
       }
       auto result = application.get_move_history(principal, path_id(request), after_ply, limit);

@@ -22,6 +22,8 @@ namespace Chess::Backend
 
       // Implementations must verify the server-side session and, for writes,
       // CSRF token and Origin. Never trust an identity header by itself.
+      // The HTTP layer only checks the CSRF header's shape; comparing it with
+      // the session's token (AuthenticationResult::csrf_token) is the implementation's job.
       virtual AuthenticationResult authenticate(const httplib::Request& request,
                                                 bool state_changing) const = 0;
   };

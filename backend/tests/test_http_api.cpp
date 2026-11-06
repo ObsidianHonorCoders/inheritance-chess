@@ -335,6 +335,14 @@ namespace
     EXPECT_EQ(response->status, 400);
   }
 
+  TEST_F(HttpApiTest, HistoryPageSizeZeroIsRejected)
+  {
+    const auto response = client_->Get(std::string("/api/v1/games/") + kGameId + "/moves?limit=0", authenticated_headers());
+    ASSERT_TRUE(response);
+    EXPECT_EQ(response->status, 400);
+    EXPECT_NE(response->body.find("invalid_query"), std::string::npos);
+  }
+
   TEST_F(HttpApiTest, OversizedRequestBodyIsRejected)
   {
     auto headers = authenticated_headers();
