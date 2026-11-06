@@ -17,6 +17,7 @@ This documentation describes the current state of the repository.
   - `ctest --preset dev-test --output-on-failure`
 
 ## Component Docs
+- `../backend/README.md`
 - `../domain/core/chess_common_interface/README.md`
 - `../domain/core/chess_pieces_logic/README.md`
 - `../domain/core/chess_board_manager/README.md`

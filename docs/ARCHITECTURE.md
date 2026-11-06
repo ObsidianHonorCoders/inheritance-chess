@@ -18,7 +18,7 @@ This document describes the current architecture of `inheritance-chess`.
 
 ## Repository boundaries
 - `domain/core/` contains the existing C++ chess modules and console entry points.
-- `backend/` is reserved for the future service/API layer.
+- `backend/` contains the C++ HTTP adapter and provider interfaces; concrete authentication and durable game-application implementations remain to be supplied.
 - `frontend/` is reserved for the future web client.
 
 The proposed HTTP routes, security requirements, and deployment topology are defined in [SERVICE_CONTRACT.md](SERVICE_CONTRACT.md) and [backend/openapi.yaml](../backend/openapi.yaml).

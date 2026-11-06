@@ -29,6 +29,10 @@ Inheritance Chess is a modular C++ chess engine organized into focused component
 - `domain/core/chess_game_handler` (CGH): orchestration facade and game lifecycle control
 - `domain/core/chess_engine_interface` (CEI): search and evaluation engine
 
+## Backend Adapter
+
+The provider-neutral C++ HTTP adapter is in `backend/`. Its routes follow [the OpenAPI contract](backend/openapi.yaml), and its authentication and game-application dependencies are deliberately injected. See [the backend README](backend/README.md) before wiring it to a listener; it is not ready to expose through Cloudflare Tunnel until secure authentication and durable storage implementations are provided.
+
 ## Executable Entry Points
 
 - `domain/core/chess_game_handler/src/ichess_runner.cpp`: interactive runner executable (`ichess_runner`)

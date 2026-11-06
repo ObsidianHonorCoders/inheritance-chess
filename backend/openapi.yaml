@@ -101,6 +101,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '429':
           $ref: '#/components/responses/RateLimited'
   /api/v1/games/{gameId}:
@@ -256,6 +258,8 @@ paths:
           $ref: '#/components/responses/PreconditionFailed'
         '422':
           $ref: '#/components/responses/Unprocessable'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '429':
           $ref: '#/components/responses/RateLimited'
         '428':
@@ -461,6 +465,12 @@ components:
         Retry-After:
           schema:
             type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PayloadTooLarge:
+      description: Request body exceeds the configured limit.
       content:
         application/problem+json:
           schema:

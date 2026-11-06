@@ -56,6 +56,7 @@ add_subdirectory(domain/core/chess_translation_unit)
 add_subdirectory(domain/core/chess_event_system)
 add_subdirectory(domain/core/chess_game_handler)
 add_subdirectory(domain/core/chess_engine_interface)
+add_subdirectory(backend)
 
 # Main executable
 add_executable(${EXE_NAME} domain/core/chess_game_handler/src/ichess_runner.cpp)

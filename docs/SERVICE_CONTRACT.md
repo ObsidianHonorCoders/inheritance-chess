@@ -33,7 +33,7 @@ This document defines the first browser-facing service boundary. The machine-rea
 | `POST /api/v1/games/{gameId}/draw-offers` | Offer draw | Requires `If-Match` and `Idempotency-Key`; acts only for the authenticated caller's seat. |
 | `POST /api/v1/games/{gameId}/draw-offers/accept` | Accept draw | Requires `If-Match` and `Idempotency-Key`, plus an opponent offer. |
 
-Error semantics: `400` malformed request; `401` no valid session; `403` CSRF or origin validation failed; `404` nonexistent or non-visible game; `409` game/seat state disallows the operation or an idempotency key is reused with a different payload; `412` stale `If-Match`; `422` syntactically valid but invalid FEN or illegal move; `428` required `If-Match` is missing; `429` request limit exceeded, with `Retry-After` when available. Do not distinguish an unknown game from another user's game in responses.
+Error semantics: `400` malformed request; `401` no valid session; `403` CSRF or origin validation failed; `404` nonexistent or non-visible game; `409` game/seat state disallows the operation or an idempotency key is reused with a different payload; `412` stale `If-Match`; `413` body exceeds the configured limit; `422` syntactically valid but invalid FEN or illegal move; `428` required `If-Match` is missing; `429` request limit exceeded, with `Retry-After` when available. Do not distinguish an unknown game from another user's game in responses.
 
 `GameSnapshot.version` is monotonically incremented after every successful state mutation. The strong ETag represents that version (for example, `"7"`). Clients must fetch the latest snapshot after `412`; they must not retry a move against a newer version without user or application-level reconciliation.
 
