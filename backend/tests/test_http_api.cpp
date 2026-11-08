@@ -42,6 +42,8 @@ namespace
       bool ready = true;
       int create_calls = 0;
       int move_calls = 0;
+      mutable int history_calls = 0;
+      mutable std::uint64_t last_history_limit = 0;
       std::uint64_t last_expected_version = 0;
       std::string last_idempotency_key;
 
@@ -74,8 +76,10 @@ namespace
       }
 
       Result<MovePage> get_move_history(const Principal&, const std::string&,
-                                        std::uint64_t, std::uint64_t) const override
+                                        std::uint64_t, std::uint64_t limit) const override
       {
+        ++history_calls;
+        last_history_limit = limit;
         return MovePage{{MoveRecord{1, "e2e4", "e4"}}, std::nullopt};
       }
 
@@ -133,9 +137,11 @@ namespace
   class HttpApiTest : public ::testing::Test
   {
     protected:
+      virtual HttpApiConfig configuration() const { return {}; }
+
       void SetUp() override
       {
-        Chess::Backend::register_http_api(server_, authenticator_, application_);
+        Chess::Backend::register_http_api(server_, authenticator_, application_, configuration());
         port_ = server_.bind_to_any_port("127.0.0.1");
         ASSERT_GT(port_, 0);
         server_thread_ = std::thread([this] { server_.listen_after_bind(); });
@@ -352,4 +358,99 @@ namespace
     EXPECT_EQ(response->status, 413);
     EXPECT_NE(response->body.find("payload_too_large"), std::string::npos);
   }
+
+  TEST_F(HttpApiTest, DuplicateJsonFieldsAreRejectedBeforeApplicationCall)
+  {
+    auto headers = authenticated_headers();
+    headers.emplace("If-Match", "\"7\"");
+    const auto response = client_->Post(std::string("/api/v1/games/") + kGameId + "/moves",
+                                        headers, R"({"uci":"a1a2","\u0075ci":"e2e4"})", "application/json");
+    ASSERT_TRUE(response);
+    EXPECT_EQ(response->status, 400);
+    EXPECT_EQ(Json::parse(response->body)["code"], "invalid_json");
+    EXPECT_EQ(application_.move_calls, 0);
+  }
+
+  TEST_F(HttpApiTest, DuplicateNestedJsonFieldsAreRejectedBeforeApplicationCall)
+  {
+    const auto response = client_->Post("/api/v1/games", authenticated_headers(),
+                                        R"({"timeControl":{"initialMs":1000,"initialMs":2000}})", "application/json");
+    ASSERT_TRUE(response);
+    EXPECT_EQ(response->status, 400);
+    EXPECT_EQ(Json::parse(response->body)["code"], "invalid_json");
+    EXPECT_EQ(application_.create_calls, 0);
+  }
+
+  TEST_F(HttpApiTest, ExcessiveJsonNestingIsRejectedAndServerRemainsAvailable)
+  {
+    const std::string body = "{\"timeControl\":" + std::string(2000, '[') + "0" + std::string(2000, ']') + "}";
+    const auto response = client_->Post("/api/v1/games", authenticated_headers(), body, "application/json");
+    ASSERT_TRUE(response);
+    EXPECT_EQ(response->status, 400);
+    EXPECT_EQ(Json::parse(response->body)["code"], "invalid_json");
+    EXPECT_EQ(application_.create_calls, 0);
+
+    const auto health = client_->Get("/api/v1/health/live");
+    ASSERT_TRUE(health);
+    EXPECT_EQ(health->status, 200);
+  }
+
+  TEST_F(HttpApiTest, JsonNumericOverflowIsRejectedWithoutEchoingInput)
+  {
+    const auto response = client_->Post("/api/v1/games", authenticated_headers(),
+                                        R"({"timeControl":{"initialMs":1e10000}})", "application/json");
+    ASSERT_TRUE(response);
+    EXPECT_EQ(response->status, 400);
+    EXPECT_EQ(Json::parse(response->body)["code"], "invalid_json");
+    EXPECT_EQ(response->body.find("1e10000"), std::string::npos);
+    EXPECT_EQ(application_.create_calls, 0);
+  }
+
+  TEST_F(HttpApiTest, ValidNestedTimeControlIsAccepted)
+  {
+    const auto response = client_->Post("/api/v1/games", authenticated_headers(),
+                                        R"({"timeControl":{"initialMs":60000,"incrementMs":1000}})", "application/json");
+    ASSERT_TRUE(response);
+    EXPECT_EQ(response->status, 201);
+    EXPECT_EQ(application_.create_calls, 1);
+  }
+
+  class HttpApiHistoryLimitTest : public HttpApiTest, public ::testing::WithParamInterface<std::size_t>
+  {
+    protected:
+      HttpApiConfig configuration() const override
+      {
+        HttpApiConfig config;
+        config.max_history_page_size = GetParam();
+        return config;
+      }
+  };
+
+  TEST_P(HttpApiHistoryLimitTest, DefaultPageSizeRespectsConfiguredBound)
+  {
+    const auto response = client_->Get(std::string("/api/v1/games/") + kGameId + "/moves", authenticated_headers());
+    ASSERT_TRUE(response);
+    EXPECT_EQ(response->status, 200);
+    const std::size_t expected_limit = GetParam() == 0 ? 1 : (GetParam() < 100 ? GetParam() : 100);
+    EXPECT_EQ(application_.last_history_limit, expected_limit);
+    EXPECT_EQ(application_.history_calls, 1);
+  }
+
+  TEST_P(HttpApiHistoryLimitTest, ExplicitPageSizeCannotExceedEffectiveBound)
+  {
+    const std::size_t maximum = GetParam() == 0 ? 1 : (GetParam() > 200 ? 200 : GetParam());
+    const std::string base = std::string("/api/v1/games/") + kGameId + "/moves?limit=";
+    const auto accepted = client_->Get(base + std::to_string(maximum), authenticated_headers());
+    ASSERT_TRUE(accepted);
+    EXPECT_EQ(accepted->status, 200);
+    EXPECT_EQ(application_.last_history_limit, maximum);
+
+    const auto rejected = client_->Get(base + std::to_string(maximum + 1), authenticated_headers());
+    ASSERT_TRUE(rejected);
+    EXPECT_EQ(rejected->status, 400);
+    EXPECT_EQ(application_.history_calls, 1);
+  }
+
+  INSTANTIATE_TEST_SUITE_P(ConfiguredBounds, HttpApiHistoryLimitTest,
+                          ::testing::Values(std::size_t{0}, std::size_t{1}, std::size_t{50}, std::size_t{200}, std::size_t{500}));
 } // namespace

@@ -15,10 +15,24 @@ The host application supplies concrete authentication and game-application imple
 
 - Bind the eventual listener only to loopback or a private container network behind the reverse proxy. Use Cloudflare Tunnel for ingress; do not make the backend port public.
 - Keep authentication and authorization in the application boundary. Never derive identity from an unverified header, and never treat a game ID as a credential.
-- The HTTP adapter requires CSRF-token shape, idempotency keys, strong version ETags, bounded JSON bodies, and strict DTO fields. `IRequestAuthenticator` must validate CSRF contents and `Origin`, not just their presence.
+- The HTTP adapter requires CSRF-token shape, idempotency keys, strong version ETags, bounded JSON bodies, and strict DTO fields. JSON parsing rejects duplicate object keys (including escaped equivalents), nesting deeper than parser depth 16, and numeric overflow with a redacted `400` response. `IRequestAuthenticator` must validate CSRF contents and `Origin`, not just their presence.
 - `IGameApplication` must reauthorize every operation, atomically enforce expected versions and idempotency, and return safe `ApplicationError` details. Do not share unsynchronized mutable `ChessGameHandler` instances between requests.
 - Responses are `no-store`; errors do not include exception messages. Do not log request bodies, cookies, CSRF tokens, or authorization material.
 - `cpp-httplib` is used as a private HTTP origin behind a TLS-terminating reverse proxy. Do not enable direct public HTTP access.
+
+## Configuration and Verification
+
+`HttpApiConfig` clamps request-body limits to 1-65536 bytes and read/write timeouts to 1-60 seconds. History page limits are clamped to 1-200 items; omitted `limit` defaults to the smaller of 100 and the effective configured limit. These limits do not replace rate limiting or transaction/execution deadlines.
+
+Build and run the backend tests from the repository root:
+
+```sh
+cmake --preset dev
+cmake --build --preset dev-build --target test_ichess_runner
+ctest --preset dev-test -R HttpApi --output-on-failure
+```
+
+The HTTP tests use test authentication and application implementations. They verify the adapter, not production identity verification, persistence, concurrency, or deployment isolation. See [ROADMAP.md](ROADMAP.md) for the remaining implementation and release gates.
 
 ## Dependencies
 

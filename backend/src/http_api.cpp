@@ -5,9 +5,12 @@
 #include <charconv>
 #include <cctype>
 #include <limits>
+#include <set>
+#include <stdexcept>
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 namespace Chess::Backend
 {
@@ -202,9 +205,42 @@ namespace Chess::Backend
       }
       try
       {
-        body = Json::parse(request.body);
+        std::vector<std::set<std::string>> object_keys;
+        const auto validate_structure = [&object_keys](int depth, Json::parse_event_t event, Json& value) {
+          if (depth > 16)
+          {
+            throw std::invalid_argument("JSON nesting limit exceeded");
+          }
+          if (event == Json::parse_event_t::object_start)
+          {
+            object_keys.emplace_back();
+          }
+          else if (event == Json::parse_event_t::key)
+          {
+            if (!object_keys.back().insert(value.get<std::string>()).second)
+            {
+              throw std::invalid_argument("Duplicate JSON key");
+            }
+          }
+          else if (event == Json::parse_event_t::object_end)
+          {
+            object_keys.pop_back();
+          }
+          return true;
+        };
+        body = Json::parse(request.body, validate_structure);
       }
       catch (const Json::parse_error&)
+      {
+        write_problem(response, 400, "invalid_json", "Bad Request", "The request body is not valid JSON.");
+        return false;
+      }
+      catch (const Json::out_of_range&)
+      {
+        write_problem(response, 400, "invalid_json", "Bad Request", "The request body is not valid JSON.");
+        return false;
+      }
+      catch (const std::invalid_argument&)
       {
         write_problem(response, 400, "invalid_json", "Bad Request", "The request body is not valid JSON.");
         return false;
@@ -545,11 +581,12 @@ namespace Chess::Backend
         return;
       }
       std::uint64_t after_ply = 0;
-      std::uint64_t limit = 100;
+        const std::size_t maximum_page_size = std::clamp(config.max_history_page_size, std::size_t{1}, std::size_t{200});
+        std::uint64_t limit = 0;
       const bool after_ply_ok =
           parse_unsigned_query(request, "afterPly", 0, std::numeric_limits<std::uint64_t>::max(), response, after_ply);
       const bool limit_ok = after_ply_ok
-          && parse_unsigned_query(request, "limit", 100, std::min(config.max_history_page_size, std::size_t{200}), response, limit);
+          && parse_unsigned_query(request, "limit", std::min(maximum_page_size, std::size_t{100}), maximum_page_size, response, limit);
       if (!after_ply_ok || !limit_ok)
       {
         return; // error already written by parse_unsigned_query
