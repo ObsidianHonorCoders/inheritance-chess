@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -12,6 +13,13 @@ namespace Chess::Backend
   struct Principal
   {
       std::string id;
+      std::string display_name;
+
+      Principal() = default;
+      explicit Principal(std::string principal_id, std::string name = {})
+          : id(std::move(principal_id)), display_name(std::move(name))
+      {
+      }
   };
 
   struct ApplicationError

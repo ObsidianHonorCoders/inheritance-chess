@@ -6,6 +6,7 @@ This document defines the first browser-facing service boundary. The machine-rea
 
 - API base path: `/api/v1`.
 - JSON over HTTPS; one public origin serves the frontend and proxies `/api/*` to the backend.
+- The repository's `ichess_backend_server` is a separate **loopback-only development executable**. Its `POST /api/v1/dev/session` guest bootstrap and in-memory adapters are not a production deployment of this contract.
 - Use URL-safe game IDs generated with at least 128 bits of cryptographic entropy; IDs are not credentials. Do not expose the current time-derived core `game_id` as an access token.
 - The backend is authoritative for game state, move legality, clocks, and outcomes. The browser never decides whether a move is legal.
 - Version 1 supports authenticated, two-seat standard chess. The creator occupies White; the first eligible second participant joins as Black. Spectators and matchmaking are out of scope.

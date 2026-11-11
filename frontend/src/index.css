@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 224 20% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 20% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 20% 8%;
+    --primary: 162 80% 32%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 94%;
+    --secondary-foreground: 224 20% 12%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 9% 40%;
+    --accent: 220 14% 90%;
+    --accent-foreground: 224 20% 12%;
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 142 70% 34%;
+    --success-foreground: 0 0% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 30 80% 8%;
+    --border: 220 13% 86%;
+    --input: 220 13% 86%;
+    --ring: 162 80% 32%;
+    --radius: 0.625rem;
+  }
+
+  /* Dark is the default theme (`class="dark"` on <html>). */
+  .dark {
+    --background: 224 20% 7%;
+    --foreground: 210 20% 96%;
+    --card: 224 18% 10%;
+    --card-foreground: 210 20% 96%;
+    --popover: 224 18% 10%;
+    --popover-foreground: 210 20% 96%;
+    --primary: 162 72% 45%;
+    --primary-foreground: 224 20% 6%;
+    --secondary: 224 14% 16%;
+    --secondary-foreground: 210 20% 96%;
+    --muted: 224 14% 16%;
+    --muted-foreground: 215 12% 64%;
+    --accent: 224 14% 21%;
+    --accent-foreground: 210 20% 96%;
+    --destructive: 0 72% 52%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 142 62% 40%;
+    --success-foreground: 0 0% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 30 80% 8%;
+    --border: 224 14% 19%;
+    --input: 224 14% 22%;
+    --ring: 162 72% 45%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply min-h-screen bg-background text-foreground antialiased;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+}

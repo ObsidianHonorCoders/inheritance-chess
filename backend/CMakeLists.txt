@@ -22,6 +22,7 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 add_library(ichess_backend STATIC
     src/http_api.cpp
+    src/local_adapters.cpp
 )
 
 target_include_directories(ichess_backend PUBLIC
@@ -32,6 +33,7 @@ target_link_libraries(ichess_backend
     PUBLIC
         cgh
         ctu
+        cei
         httplib::httplib
         nlohmann_json::nlohmann_json
 )
@@ -43,4 +45,15 @@ if(MSVC)
     target_compile_options(ichess_backend PRIVATE /W4)
 else()
     target_compile_options(ichess_backend PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+add_executable(ichess_backend_server src/server_main.cpp)
+target_link_libraries(ichess_backend_server PRIVATE ichess_backend ctu cei)
+set_property(TARGET ichess_backend_server PROPERTY CXX_STANDARD 20)
+set_property(TARGET ichess_backend_server PROPERTY CXX_STANDARD_REQUIRED ON)
+
+if(MSVC)
+    target_compile_options(ichess_backend_server PRIVATE /W4)
+else()
+    target_compile_options(ichess_backend_server PRIVATE -Wall -Wextra -Wpedantic)
 endif()

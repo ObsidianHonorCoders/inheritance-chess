@@ -31,7 +31,7 @@ Inheritance Chess is a modular C++ chess engine organized into focused component
 
 ## Backend Adapter
 
-The provider-neutral C++ HTTP adapter is in `backend/`. Its routes follow [the OpenAPI contract](backend/openapi.yaml), and its authentication and game-application dependencies are deliberately injected. See [the backend README](backend/README.md) before wiring it to a listener; it is not ready to expose through Cloudflare Tunnel until secure authentication and durable storage implementations are provided.
+The provider-neutral C++ HTTP adapter is in `backend/`. Its routes follow [the OpenAPI contract](backend/openapi.yaml), and its production authentication and game-application dependencies are deliberately injected. A loopback-only, in-memory development server is available for local frontend play; it is not suitable for LAN or Cloudflare Tunnel exposure. See [the backend README](backend/README.md).
 
 ## Executable Entry Points
 
