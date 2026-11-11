@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 project(
     inheritance_chess_project
     VERSION 0.0.0
-    LANGUAGES CXX
+    LANGUAGES C CXX
     DESCRIPTION "Modular C++ chess engine"
     HOMEPAGE_URL "https://github.com/ObsidianHonorCoders/inheritance-chess"
 )

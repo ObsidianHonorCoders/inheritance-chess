@@ -2,13 +2,15 @@
 
 ## Current State
 
-The repository has seven C++20 chess-core libraries, two console executables, and an HTTP adapter library. The adapter exposes the versioned API defined in [openapi.yaml](openapi.yaml), with transport DTOs and interfaces for authentication and game operations. HTTP tests use doubles for those interfaces. There is no production service executable, concrete authenticator, or durable game application yet.
+The repository has seven C++20 chess-core libraries, two console executables, and an HTTP adapter library. The adapter exposes the versioned API defined in [openapi.yaml](openapi.yaml), with transport DTOs and interfaces for authentication and game operations. HTTP tests use doubles for those interfaces. A partial `SqliteGameApplication` supports durable untimed creation and participant snapshots, with real-database tests for duplicate-create concurrency, restart, retry authorization, expiry, and rollback. There is no production service executable, concrete authenticator, or complete durable game application yet.
 
 The core `ChessGameHandler` owns mutable board, timer, draw-offer, and repetition state. Do not share it concurrently between requests. Persist the initial FEN and ordered move log; reconstructing from the latest FEN alone loses repetition history. Keep public game identifiers separate from the core's identifiers.
 
 The behavioral and security requirements remain in [SERVICE_CONTRACT.md](../docs/SERVICE_CONTRACT.md). This roadmap orders implementation work; it does not change the API contract.
 
 ## 1. Durable Game Application
+
+Implemented foundation: pinned SQLite, schema version validation, synchronized connection ownership, atomic idempotent untimed creation, participant-only reads, 128-bit OS-generated IDs, and disposable replay-based handlers. Creation retries are retained for 24 hours. Next implement join and move transactions, the remaining read and lifecycle operations, full move-log restoration tests, clock policy, scheduled retention cleanup, and operational readiness checks. Other application operations currently fail closed with `501`; timed creation returns `422`.
 
 - Implement `IGameApplication` with participant authorization on every operation, including idempotent replay. Return the same `404` for absent and non-visible games.
 - Start with SQLite on local durable storage and one API process unless multiple instances are already required. Use PostgreSQL for multiple writers or API instances. Use parameterized queries, migrations, foreign keys, uniqueness constraints, and bounded lock waits.

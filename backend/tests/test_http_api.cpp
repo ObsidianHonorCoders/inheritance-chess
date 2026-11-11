@@ -1,10 +1,14 @@
 #include "http_api.h"
+#include "sqlite_database.h"
+#include "sqlite_game_application.h"
 
 #include <gtest/gtest.h>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 #include <chrono>
+#include <filesystem>
 #include <memory>
+#include <string>
 #include <thread>
 
 namespace
@@ -453,4 +457,319 @@ namespace
 
   INSTANTIATE_TEST_SUITE_P(ConfiguredBounds, HttpApiHistoryLimitTest,
                           ::testing::Values(std::size_t{0}, std::size_t{1}, std::size_t{50}, std::size_t{200}, std::size_t{500}));
+
+  TEST(SqliteDatabaseTest, InitializesSchemaAndReopensDurableDatabase)
+  {
+    const auto path = std::filesystem::temp_directory_path()
+                      / ("ichess-backend-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".db");
+    {
+      SqliteDatabase database(path.string());
+      ASSERT_TRUE(database.is_ready());
+      ASSERT_NE(database.handle(), nullptr);
+    }
+    {
+      SqliteDatabase database(path.string());
+      EXPECT_TRUE(database.is_ready());
+    }
+    std::error_code error;
+    std::filesystem::remove(path, error);
+    std::filesystem::remove(path.string() + "-wal", error);
+    std::filesystem::remove(path.string() + "-shm", error);
+  }
+
+  TEST(SqliteDatabaseTest, InvalidDatabasePathFailsClosed)
+  {
+    const auto path = std::filesystem::temp_directory_path() / "ichess-missing-directory" / "games.db";
+    SqliteDatabase database(path.string());
+    EXPECT_FALSE(database.is_ready());
+  }
+
+  TEST(SqliteGameApplicationTest, CreatesDurableUntimedGameAndReplaysSameIdempotentResult)
+  {
+    const auto path = std::filesystem::temp_directory_path()
+                      / ("ichess-game-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".db");
+    const Principal owner{"owner"};
+    std::string game_id;
+    {
+      SqliteDatabase database(path.string());
+      ASSERT_TRUE(database.is_ready());
+      SqliteGameApplication application(database);
+      ASSERT_TRUE(application.is_ready());
+      const auto created = application.create_game(owner, CreateGameCommand{}, "0123456789abcdef");
+      ASSERT_TRUE(std::holds_alternative<GameSnapshot>(created));
+      const GameSnapshot snapshot = std::get<GameSnapshot>(created);
+      game_id = snapshot.game_id;
+      EXPECT_EQ(snapshot.version, 1u);
+      EXPECT_EQ(snapshot.viewer_seat, "white");
+      EXPECT_EQ(snapshot.status, "ongoing");
+      EXPECT_EQ(snapshot.legal_moves.size(), 20u);
+
+      const auto retry = application.create_game(owner, CreateGameCommand{}, "0123456789abcdef");
+      ASSERT_TRUE(std::holds_alternative<GameSnapshot>(retry));
+      EXPECT_EQ(std::get<GameSnapshot>(retry).game_id, game_id);
+    }
+    {
+      SqliteDatabase database(path.string());
+      SqliteGameApplication application(database);
+      const auto loaded = application.get_game(owner, game_id);
+      ASSERT_TRUE(std::holds_alternative<GameSnapshot>(loaded));
+      EXPECT_EQ(std::get<GameSnapshot>(loaded).fen,
+                "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+      const auto replay = application.create_game(owner, CreateGameCommand{}, "0123456789abcdef");
+      ASSERT_TRUE(std::holds_alternative<GameSnapshot>(replay));
+      EXPECT_EQ(std::get<GameSnapshot>(replay).game_id, game_id);
+    }
+    std::error_code cleanup_error;
+    std::filesystem::remove(path, cleanup_error);
+    std::filesystem::remove(path.string() + "-wal", cleanup_error);
+    std::filesystem::remove(path.string() + "-shm", cleanup_error);
+  }
+
+  TEST(SqliteGameApplicationTest, HidesGamesFromNonParticipantsAndRejectsChangedIdempotentPayload)
+  {
+    const auto path = std::filesystem::temp_directory_path()
+                      / ("ichess-game-auth-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".db");
+    {
+      SqliteDatabase database(path.string());
+      ASSERT_TRUE(database.is_ready());
+      SqliteGameApplication application(database);
+      const auto created = application.create_game(Principal{"owner"}, CreateGameCommand{}, "0123456789abcdef");
+      ASSERT_TRUE(std::holds_alternative<GameSnapshot>(created));
+      const std::string game_id = std::get<GameSnapshot>(created).game_id;
+
+      const auto hidden = application.get_game(Principal{"other"}, game_id);
+      ASSERT_TRUE(std::holds_alternative<ApplicationError>(hidden));
+      EXPECT_EQ(std::get<ApplicationError>(hidden).status, 404);
+
+      CreateGameCommand different;
+      different.initial_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1";
+      const auto conflict = application.create_game(Principal{"owner"}, different, "0123456789abcdef");
+      ASSERT_TRUE(std::holds_alternative<ApplicationError>(conflict));
+      EXPECT_EQ(std::get<ApplicationError>(conflict).status, 409);
+    }
+    std::error_code cleanup_error;
+    std::filesystem::remove(path, cleanup_error);
+    std::filesystem::remove(path.string() + "-wal", cleanup_error);
+    std::filesystem::remove(path.string() + "-shm", cleanup_error);
+  }
+
+  TEST(SqliteGameApplicationTest, RejectsInvalidAndTimedGameRequestsUntilSupported)
+  {
+    const auto path = std::filesystem::temp_directory_path()
+                      / ("ichess-game-input-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".db");
+    {
+      SqliteDatabase database(path.string());
+      ASSERT_TRUE(database.is_ready());
+      SqliteGameApplication application(database);
+
+      CreateGameCommand invalid;
+      invalid.initial_fen = "not a fen";
+      const auto invalid_result = application.create_game(Principal{"owner"}, invalid, "0123456789abcdef");
+      ASSERT_TRUE(std::holds_alternative<ApplicationError>(invalid_result));
+      EXPECT_EQ(std::get<ApplicationError>(invalid_result).status, 422);
+
+      CreateGameCommand timed;
+      timed.time_control = TimeControl{};
+      const auto timed_result = application.create_game(Principal{"owner"}, timed, "fedcba9876543210");
+      ASSERT_TRUE(std::holds_alternative<ApplicationError>(timed_result));
+      EXPECT_EQ(std::get<ApplicationError>(timed_result).status, 422);
+    }
+    std::error_code cleanup_error;
+    std::filesystem::remove(path, cleanup_error);
+    std::filesystem::remove(path.string() + "-wal", cleanup_error);
+    std::filesystem::remove(path.string() + "-shm", cleanup_error);
+  }
+
+  class SqliteApplicationTest : public ::testing::Test
+  {
+    protected:
+      void SetUp() override
+      {
+        path_ = std::filesystem::temp_directory_path()
+                / ("ichess-store-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".db");
+      }
+
+      void TearDown() override
+      {
+        std::error_code cleanup_error;
+        std::filesystem::remove(path_, cleanup_error);
+        std::filesystem::remove(path_.string() + "-wal", cleanup_error);
+        std::filesystem::remove(path_.string() + "-shm", cleanup_error);
+      }
+
+      std::filesystem::path path_;
+  };
+
+  TEST_F(SqliteApplicationTest, ConcurrentCreateRetriesAcrossConnectionsCreateExactlyOneGame)
+  {
+    SqliteDatabase first_database(path_.string());
+    SqliteDatabase second_database(path_.string());
+    ASSERT_TRUE(first_database.is_ready());
+    ASSERT_TRUE(second_database.is_ready());
+    SqliteGameApplication first(first_database);
+    SqliteGameApplication second(second_database);
+    Result<GameSnapshot> first_result;
+    Result<GameSnapshot> second_result;
+    std::thread first_thread([&] {
+      first_result = first.create_game(Principal{"owner"}, {}, "0123456789abcdef");
+    });
+    std::thread second_thread([&] {
+      second_result = second.create_game(Principal{"owner"}, {}, "0123456789abcdef");
+    });
+    first_thread.join();
+    second_thread.join();
+    ASSERT_TRUE(std::holds_alternative<GameSnapshot>(first_result));
+    ASSERT_TRUE(std::holds_alternative<GameSnapshot>(second_result));
+    EXPECT_EQ(std::get<GameSnapshot>(first_result).game_id, std::get<GameSnapshot>(second_result).game_id);
+
+    sqlite3_stmt* statement = nullptr;
+    ASSERT_EQ(sqlite3_prepare_v2(first_database.handle(), "SELECT count(*) FROM games", -1, &statement, nullptr), SQLITE_OK);
+    ASSERT_EQ(sqlite3_step(statement), SQLITE_ROW);
+    EXPECT_EQ(sqlite3_column_int(statement, 0), 1);
+    sqlite3_finalize(statement);
+  }
+
+  TEST_F(SqliteApplicationTest, ReplayedCreateRechecksCurrentOwnership)
+  {
+    SqliteDatabase database(path_.string());
+    SqliteGameApplication application(database);
+    const auto created = application.create_game(Principal{"owner"}, {}, "0123456789abcdef");
+    ASSERT_TRUE(std::holds_alternative<GameSnapshot>(created));
+    ASSERT_EQ(sqlite3_exec(database.handle(), "UPDATE games SET white_principal = 'replacement'", nullptr, nullptr, nullptr), SQLITE_OK);
+    const auto replay = application.create_game(Principal{"owner"}, {}, "0123456789abcdef");
+    ASSERT_TRUE(std::holds_alternative<ApplicationError>(replay));
+    EXPECT_EQ(std::get<ApplicationError>(replay).status, 404);
+  }
+
+  TEST_F(SqliteApplicationTest, StorageFailuresAreNotReportedAsMissingGames)
+  {
+    SqliteDatabase database(path_.string());
+    SqliteGameApplication application(database);
+    ASSERT_EQ(sqlite3_exec(database.handle(), "DROP TABLE games", nullptr, nullptr, nullptr), SQLITE_OK);
+    const auto result = application.get_game(Principal{"owner"}, "abcdefghijklmnopqrstuv");
+    ASSERT_TRUE(std::holds_alternative<ApplicationError>(result));
+    EXPECT_EQ(std::get<ApplicationError>(result).status, 500);
+  }
+
+  TEST_F(SqliteApplicationTest, CustomFenCountersDoNotInventMoveHistory)
+  {
+    SqliteDatabase database(path_.string());
+    SqliteGameApplication application(database);
+    CreateGameCommand command;
+    command.initial_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 42";
+    const auto created = application.create_game(Principal{"owner"}, command, "0123456789abcdef");
+    ASSERT_TRUE(std::holds_alternative<GameSnapshot>(created));
+    const auto& snapshot = std::get<GameSnapshot>(created);
+    EXPECT_EQ(snapshot.move_count, 0u);
+    EXPECT_EQ(snapshot.side_to_move, "black");
+    EXPECT_EQ(snapshot.game_id.size(), 32u);
+  }
+
+  TEST_F(SqliteApplicationTest, UnavailableDatabaseRejectsApplicationOperations)
+  {
+    SqliteDatabase database((path_ / "missing" / "games.db").string());
+    SqliteGameApplication application(database);
+    EXPECT_FALSE(application.is_ready());
+    const auto created = application.create_game(Principal{"owner"}, {}, "0123456789abcdef");
+    ASSERT_TRUE(std::holds_alternative<ApplicationError>(created));
+    EXPECT_EQ(std::get<ApplicationError>(created).status, 503);
+    const auto loaded = application.get_game(Principal{"owner"}, "abcdefghijklmnopqrstuv");
+    ASSERT_TRUE(std::holds_alternative<ApplicationError>(loaded));
+    EXPECT_EQ(std::get<ApplicationError>(loaded).status, 503);
+  }
+
+  TEST_F(SqliteApplicationTest, FutureSchemaVersionFailsClosedWithoutCreatingTables)
+  {
+    {
+      SqliteDatabase database(path_.string());
+      ASSERT_TRUE(database.is_ready());
+      ASSERT_EQ(sqlite3_exec(database.handle(), "UPDATE schema_version SET version = 2; DROP TABLE game_moves;",
+                            nullptr, nullptr, nullptr), SQLITE_OK);
+    }
+    SqliteDatabase reopened(path_.string());
+    EXPECT_FALSE(reopened.is_ready());
+    sqlite3_stmt* statement = nullptr;
+    ASSERT_EQ(sqlite3_prepare_v2(reopened.handle(),
+                                "SELECT count(*) FROM sqlite_schema WHERE name = 'game_moves'", -1, &statement, nullptr), SQLITE_OK);
+    ASSERT_EQ(sqlite3_step(statement), SQLITE_ROW);
+    EXPECT_EQ(sqlite3_column_int(statement, 0), 0);
+    sqlite3_finalize(statement);
+  }
+
+  TEST_F(SqliteApplicationTest, RejectsStructurallyInvalidChessPositions)
+  {
+    SqliteDatabase database(path_.string());
+    SqliteGameApplication application(database);
+    for (const std::string fen : {
+           "8/8/8/8/8/8/8/8 w - - 0 1",
+           "8/8/8/8/8/8/4k3/4K3 w - - 0 1",
+           "4k3/8/8/8/8/8/8/P3K3 w - - 0 1",
+           "4k3/8/8/8/8/8/8/4K3 w - - -1 1"})
+    {
+      CreateGameCommand command;
+      command.initial_fen = fen;
+      const auto result = application.create_game(Principal{"owner"}, command, "0123456789abcdef");
+      ASSERT_TRUE(std::holds_alternative<ApplicationError>(result));
+      EXPECT_EQ(std::get<ApplicationError>(result).code, "invalid_fen");
+    }
+  }
+
+  TEST_F(SqliteApplicationTest, InitialTerminalPositionDoesNotAdvertisePlayableMoves)
+  {
+    SqliteDatabase database(path_.string());
+    SqliteGameApplication application(database);
+    CreateGameCommand command;
+    command.initial_fen = "4k3/8/8/8/8/8/8/4K3 w - - 0 1";
+    const auto result = application.create_game(Principal{"owner"}, command, "0123456789abcdef");
+    ASSERT_TRUE(std::holds_alternative<GameSnapshot>(result));
+    const auto& snapshot = std::get<GameSnapshot>(result);
+    EXPECT_EQ(snapshot.status, "draw_insufficient_material");
+    EXPECT_TRUE(snapshot.legal_moves.empty());
+  }
+
+  TEST_F(SqliteApplicationTest, ExpiredIdempotencyKeyCreatesNewGame)
+  {
+    SqliteDatabase database(path_.string());
+    SqliteGameApplication application(database);
+    const auto first = application.create_game(Principal{"owner"}, {}, "0123456789abcdef");
+    ASSERT_TRUE(std::holds_alternative<GameSnapshot>(first));
+    ASSERT_EQ(sqlite3_exec(database.handle(), "UPDATE idempotency_records SET created_at = '2000-01-01T00:00:00Z'",
+                          nullptr, nullptr, nullptr), SQLITE_OK);
+    const auto second = application.create_game(Principal{"owner"}, {}, "0123456789abcdef");
+    ASSERT_TRUE(std::holds_alternative<GameSnapshot>(second));
+    EXPECT_NE(std::get<GameSnapshot>(first).game_id, std::get<GameSnapshot>(second).game_id);
+  }
+
+  TEST_F(SqliteApplicationTest, SameKeyForDifferentPrincipalsCreatesSeparateGames)
+  {
+    SqliteDatabase database(path_.string());
+    SqliteGameApplication application(database);
+    const auto first = application.create_game(Principal{"first-owner"}, {}, "0123456789abcdef");
+    const auto second = application.create_game(Principal{"second-owner"}, {}, "0123456789abcdef");
+    ASSERT_TRUE(std::holds_alternative<GameSnapshot>(first));
+    ASSERT_TRUE(std::holds_alternative<GameSnapshot>(second));
+    EXPECT_NE(std::get<GameSnapshot>(first).game_id, std::get<GameSnapshot>(second).game_id);
+  }
+
+  TEST_F(SqliteApplicationTest, FailedIdempotencyWriteRollsBackGameCreation)
+  {
+    SqliteDatabase database(path_.string());
+    SqliteGameApplication application(database);
+    ASSERT_EQ(sqlite3_exec(database.handle(),
+                          "CREATE TRIGGER reject_retry_record BEFORE INSERT ON idempotency_records "
+                          "BEGIN SELECT RAISE(ABORT, 'test failure'); END", nullptr, nullptr, nullptr), SQLITE_OK);
+    const auto failed = application.create_game(Principal{"owner"}, {}, "0123456789abcdef");
+    ASSERT_TRUE(std::holds_alternative<ApplicationError>(failed));
+    EXPECT_EQ(std::get<ApplicationError>(failed).status, 500);
+
+    sqlite3_stmt* statement = nullptr;
+    ASSERT_EQ(sqlite3_prepare_v2(database.handle(), "SELECT count(*) FROM games", -1, &statement, nullptr), SQLITE_OK);
+    ASSERT_EQ(sqlite3_step(statement), SQLITE_ROW);
+    EXPECT_EQ(sqlite3_column_int(statement, 0), 0);
+    sqlite3_finalize(statement);
+
+    ASSERT_EQ(sqlite3_exec(database.handle(), "DROP TRIGGER reject_retry_record", nullptr, nullptr, nullptr), SQLITE_OK);
+    const auto retry = application.create_game(Principal{"owner"}, {}, "0123456789abcdef");
+    EXPECT_TRUE(std::holds_alternative<GameSnapshot>(retry));
+  }
 } // namespace

@@ -20,8 +20,26 @@ FetchContent_Declare(nlohmann_json
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+FetchContent_Declare(sqlite3
+    URL https://www.sqlite.org/2025/sqlite-amalgamation-3500400.zip
+    URL_HASH SHA256=1D3049DD0F830A025A53105FC79FD2AB9431AEA99E137809D064D8EE8356B032
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(sqlite3)
+
+add_library(ichess_sqlite STATIC ${sqlite3_SOURCE_DIR}/sqlite3.c)
+target_include_directories(ichess_sqlite PUBLIC ${sqlite3_SOURCE_DIR})
+target_compile_definitions(ichess_sqlite PRIVATE
+    SQLITE_THREADSAFE=1
+    SQLITE_DEFAULT_FOREIGN_KEYS=1
+    SQLITE_DQS=0
+    SQLITE_OMIT_LOAD_EXTENSION
+)
+
 add_library(ichess_backend STATIC
     src/http_api.cpp
+    src/sqlite_database.cpp
+    src/sqlite_game_application.cpp
 )
 
 target_include_directories(ichess_backend PUBLIC
@@ -34,10 +52,15 @@ target_link_libraries(ichess_backend
         ctu
         httplib::httplib
         nlohmann_json::nlohmann_json
+        ichess_sqlite
 )
 
 set_property(TARGET ichess_backend PROPERTY CXX_STANDARD 20)
 set_property(TARGET ichess_backend PROPERTY CXX_STANDARD_REQUIRED ON)
+
+if(WIN32)
+    target_link_libraries(ichess_backend PRIVATE bcrypt)
+endif()
 
 if(MSVC)
     target_compile_options(ichess_backend PRIVATE /W4)
