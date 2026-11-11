@@ -1,29 +1,35 @@
 # Inheritance Chess Frontend
 
-The React/Vite web frontend lives in this directory. It is currently a standalone frontend
-project; it is not part of the CMake build.
+The React/Vite frontend calls the C++ backend through Vite's same-origin `/api` proxy. Chess
+positions and legal moves come from the backend/domain; the frontend does not implement chess
+rules.
 
-## Development
+## Run locally on Windows
 
-```bash
-npm ci
-npm run dev
-npm run typecheck
-npm run build
+From the repository root, build and start the backend in one PowerShell terminal:
+
+```powershell
+cmake -S . -B build -DICHESS_BUILD_BACKEND=ON
+cmake --build build --target ichess_backend_server
+.\build\backend\ichess_backend_server.exe
 ```
 
-Requires Node.js 18.18 or newer.
+The backend binds only to `127.0.0.1:8080`. Keep it running. In a second terminal:
 
-## Current availability
+```powershell
+cd frontend
+npm ci
+npm run dev
+```
 
-Settings (board and piece themes, sound, animations, and coordinates) work locally in the browser.
-Play and analysis routes are intentionally unavailable:
+Open the Vite URL shown in the terminal (normally http://localhost:5173). To run type-check and a
+production build, use `npm run typecheck` and `npm run build` in `frontend/`.
 
-- The backend defines the versioned game API, but concrete game-application and session
-  authentication adapters are not present.
-- The domain engine is a C++ library and is not exposed through a browser-callable analysis API.
-- The existing local chess.js game and mock engine are not used to present Play or Analysis as
-  backend-backed features.
+The service provides **local-development-only** guest sessions and in-memory games. They are lost
+when the backend exits. To play both sides, open the frontend in a different browser or private
+window, create a separate guest session, then join the first player's game ID. The first player
+must share that ID.
 
-See [the migration gaps report](../docs/FRONTEND_MIGRATION_GAPS.md) for missing capabilities and
-integration risks.
+Do not bind this service to a LAN/public interface, place it behind Cloudflare Tunnel, or use it
+for real accounts. It has no production identity provider or durable game/session storage. See
+[the backend README](../backend/README.md) and [the migration gaps report](../docs/FRONTEND_MIGRATION_GAPS.md).

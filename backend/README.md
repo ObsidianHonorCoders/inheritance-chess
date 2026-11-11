@@ -9,7 +9,31 @@
 - `IGameApplication` owns authorization, versioned/idempotent operations, and repository transactions. Its implementation must enforce game-seat ownership and persist initial FEN plus the ordered move log.
 - `api_types.h` contains transport-neutral API DTOs and safe application errors.
 
-The host application supplies concrete authentication and game-application implementations before starting a listener. This library does not include a development identity bypass or an in-memory production store. Until those adapters exist, the service must not be exposed through Cloudflare Tunnel.
+The `ichess_backend_server` executable provides **local-development-only** implementations in
+`src/local_adapters.cpp`: ephemeral guest-cookie sessions and an in-memory game application that
+delegates move validation and game state to the C++ domain. It binds to `127.0.0.1` only. Games
+and sessions are lost at process exit. This is not a production host and must not be exposed to a
+LAN, reverse proxy, or Cloudflare Tunnel.
+
+Production hosting still requires a trusted identity/session implementation, durable game
+repository, bounded session/idempotency retention, and deployment-specific origin/cookie settings.
+
+## Run the local development service
+
+From the repository root:
+
+```powershell
+cmake -S . -B build -DICHESS_BUILD_BACKEND=ON
+cmake --build build --target ichess_backend_server
+.\build\backend\ichess_backend_server.exe
+```
+
+The default port is 8080. Set `ICHESS_BACKEND_PORT` to choose another local port; update the
+frontend Vite proxy target in `frontend/vite.config.ts` to match.
+
+The local-only `POST /api/v1/dev/session` endpoint issues a guest cookie for the current browser.
+It accepts requests only from the configured localhost Vite origins. The endpoint deliberately
+does not exist in the production API contract.
 
 ## Security Requirements
 

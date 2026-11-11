@@ -1,4 +1,4 @@
-import type { GameStatus, MoveRecord, SoundEvent } from '@/types';
+import type { SoundEvent } from '@/types';
 
 const SOUND_FILES: Record<SoundEvent, string> = {
   move: 'move.wav',
@@ -11,13 +11,13 @@ const SOUND_FILES: Record<SoundEvent, string> = {
 
 const soundUrl = (file: string): string => `${import.meta.env.BASE_URL}sounds/${file}`;
 
-/** Picks the most significant sound for a move (checkmate > check > promotion > castle > capture > move). */
-export function getSoundEvent(move: MoveRecord, status: GameStatus): SoundEvent {
-  if (status.isCheckmate) return 'checkmate';
-  if (status.isCheck) return 'check';
-  if (move.promotion) return 'promotion';
-  if (move.flags.includes('k') || move.flags.includes('q')) return 'castle';
-  if (move.flags.includes('c') || move.flags.includes('e')) return 'capture';
+/** Picks the most significant sound from server-issued notation and status. */
+export function getSoundEvent(move: { uci: string; san: string }, status: string): SoundEvent {
+  if (status === 'checkmate') return 'checkmate';
+  if (status === 'check') return 'check';
+  if (move.uci.length === 5) return 'promotion';
+  if (move.san.startsWith('O-O')) return 'castle';
+  if (move.san.includes('x')) return 'capture';
   return 'move';
 }
 

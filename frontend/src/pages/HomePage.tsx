@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Settings, type LucideIcon } from 'lucide-react';
+import { Settings, Swords, type LucideIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,13 @@ interface HomeAction {
 }
 
 const ACTIONS: readonly HomeAction[] = [
+  {
+    to: ROUTES.play,
+    title: 'Play',
+    description: 'Create a game or join one using a game ID.',
+    icon: Swords,
+    cta: 'Play',
+  },
   {
     to: ROUTES.settings,
     title: 'Settings',
@@ -57,25 +64,24 @@ export function HomePage() {
           Inheritance <span className="text-primary">Chess</span>
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-          A chess interface for the Inheritance Chess engine.
+          Play with moves validated by the Inheritance Chess C++ domain.
         </p>
       </section>
 
       <section
         className="mx-auto mb-8 max-w-3xl rounded-lg border border-warning/40 bg-warning/5 p-5"
-        aria-labelledby="features-unavailable-title"
+        aria-labelledby="features-limited-title"
       >
-        <h2 id="features-unavailable-title" className="font-semibold">
-          Play and analysis are unavailable
+        <h2 id="features-limited-title" className="font-semibold">
+          Local development service
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          The backend currently defines game API interfaces but has no concrete game or session
-          authentication adapters. It also exposes no engine-analysis endpoint. These screens are
-          disabled rather than using local chess rules or mock engine results.
+          Play uses temporary in-memory games and guest sessions on this computer. Analysis is not
+          available. Do not expose this development service to a network.
         </p>
       </section>
 
-      <ul className="mx-auto grid max-w-sm gap-4">
+      <ul className="mx-auto grid max-w-2xl gap-4 md:grid-cols-2">
         {ACTIONS.map((action, index) => (
           <ActionCard key={action.to} action={action} index={index} />
         ))}

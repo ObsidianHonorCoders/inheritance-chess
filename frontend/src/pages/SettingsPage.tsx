@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useSettingsStore } from '@/store/settingsStore';
-import { START_FEN } from '@/utils/chess';
+import { START_FEN } from '@/utils/fen';
 
 export function SettingsPage() {
   const soundEnabled = useSettingsStore((state) => state.soundEnabled);

@@ -9,6 +9,49 @@ servers:
 security:
   - SessionCookie: []
 paths:
+  /api/v1/dev/session:
+    post:
+      operationId: createLocalGuestSession
+      summary: Create a local development guest session
+      description: Local-only bootstrap implemented by ichess_backend_server. The service binds to loopback; do not expose this endpoint on a LAN or public deployment.
+      x-local-only: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [displayName]
+              properties:
+                displayName:
+                  type: string
+                  minLength: 1
+                  maxLength: 32
+      responses:
+        '201':
+          description: A temporary local guest session was issued.
+          headers:
+            Set-Cookie:
+              description: HttpOnly SameSite cookie; Secure is omitted only because this endpoint is for loopback HTTP development.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [csrfToken]
+                properties:
+                  csrfToken:
+                    type: string
+                    minLength: 32
+                    maxLength: 256
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/v1/health/live:
     get:
       operationId: getLiveness

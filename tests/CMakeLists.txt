@@ -67,7 +67,10 @@ set(CEI_TEST_SOURCES
 set(BACKEND_TEST_SOURCES)
 set(BACKEND_TEST_LIBS)
 if(ICHESS_BUILD_BACKEND)
-    set(BACKEND_TEST_SOURCES ../backend/tests/test_http_api.cpp)
+    set(BACKEND_TEST_SOURCES
+        ../backend/tests/test_http_api.cpp
+        ../backend/tests/test_local_adapters.cpp
+    )
     set(BACKEND_TEST_LIBS ichess_backend)
 endif()
 

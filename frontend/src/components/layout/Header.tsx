@@ -1,5 +1,5 @@
 import { NavLink, Link } from 'react-router-dom';
-import { Crown, Settings, type LucideIcon } from 'lucide-react';
+import { Crown, Settings, Swords, type LucideIcon } from 'lucide-react';
 import logoUrl from '@/assets/icons/logo.svg';
 import { ROUTES } from '@/routes/paths';
 import { cn } from '@/utils/cn';
@@ -13,6 +13,7 @@ interface NavItem {
 
 const NAV_ITEMS: readonly NavItem[] = [
   { to: ROUTES.home, label: 'Home', icon: Crown, end: true },
+  { to: ROUTES.play, label: 'Play', icon: Swords },
   { to: ROUTES.settings, label: 'Settings', icon: Settings },
 ];
 

@@ -29,7 +29,7 @@ export interface MoveRecord {
   uci: string;
   captured?: PieceSymbol;
   promotion?: PieceSymbol;
-  /** chess.js move flags (n, b, e, c, p, k, q). */
+  /** Domain move flags used for sound and board annotations. */
   flags: string;
   fenAfter: string;
 }

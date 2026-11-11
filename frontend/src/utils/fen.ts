@@ -1,14 +1,7 @@
-import { validateFen } from 'chess.js';
-import type { Color, OperationResult } from '@/types';
+import type { Color } from '@/types';
 
-export function validateFenString(fen: string): OperationResult {
-  const trimmed = fen.trim();
-  if (!trimmed) return { ok: false, error: 'FEN is empty.' };
-
-  const result = validateFen(trimmed);
-  return result.ok ? { ok: true } : { ok: false, error: result.error ?? 'Invalid FEN.' };
-}
+export const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
 export function getTurnFromFen(fen: string): Color {
-  return fen.split(' ')[1] === 'b' ? 'b' : 'w';
+  return fen.trim().split(/\s+/)[1] === 'b' ? 'b' : 'w';
 }
