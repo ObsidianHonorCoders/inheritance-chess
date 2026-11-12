@@ -29,7 +29,16 @@ namespace Chess::Backend
       std::string set_cookie;
   };
 
-  class SessionAuthenticator final : public IRequestAuthenticator
+  class ILoginSessionManager
+  {
+    public:
+      virtual ~ILoginSessionManager() = default;
+      virtual bool accepts_login_origin(const httplib::Request& request) const = 0;
+      virtual std::optional<SessionCredentials> issue_session(const Principal& principal) = 0;
+      virtual bool revoke_request_session(const httplib::Request& request) = 0;
+  };
+
+  class SessionAuthenticator final : public IRequestAuthenticator, public ILoginSessionManager
   {
     public:
       using WallClock = std::function<std::chrono::system_clock::time_point()>;
@@ -41,8 +50,11 @@ namespace Chess::Backend
           std::shared_ptr<ISessionRevocationStore> store = {});
 
       std::optional<SessionCredentials> create_session(const Principal& principal);
+      bool accepts_login_origin(const httplib::Request& request) const override;
+      std::optional<SessionCredentials> issue_session(const Principal& principal) override;
       bool import_session(const Principal& principal, const std::string& token, std::int64_t expires);
       bool revoke_session(const std::string& token);
+      bool revoke_request_session(const httplib::Request& request) override;
       std::size_t session_count() const;
       std::optional<Principal> principal_for(const httplib::Request& request) const;
       AuthenticationResult authenticate(const httplib::Request& request, bool state_changing) const override;

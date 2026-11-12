@@ -205,6 +205,17 @@ namespace Chess::Backend
         + "; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=" + std::to_string(config_.lifetime.count())};
   }
 
+  std::optional<SessionCredentials> SessionAuthenticator::issue_session(const Principal& principal)
+  {
+    return create_session(principal);
+  }
+
+  bool SessionAuthenticator::accepts_login_origin(const httplib::Request& request) const
+  {
+    return request.get_header_value_count("Origin") == 1
+        && request.get_header_value("Origin") == config_.public_origin;
+  }
+
   bool SessionAuthenticator::import_session(const Principal& principal, const std::string& token,
                                             std::int64_t expires)
   {
@@ -241,6 +252,13 @@ namespace Chess::Backend
       return constant_time_equal(session.token, token);
     }), sessions_.end());
     return true;
+  }
+
+  bool SessionAuthenticator::revoke_request_session(const httplib::Request& request)
+  {
+    const auto token = cookie_token(request);
+    if (!token || !authenticate(request, true).authenticated) return false;
+    return revoke_session(*token);
   }
 
   bool SessionAuthenticator::revoked(std::string_view token) const

@@ -1,4 +1,5 @@
 #include "http_api.h"
+#include "local_account_store.h"
 #include "session_revocation_store.h"
 #include "service_runtime.h"
 #include "sqlite_game_application.h"
@@ -42,6 +43,13 @@ namespace
       throw std::runtime_error("Invalid runtime environment.");
     return value;
 #endif
+  }
+
+  bool parse_boolean(const std::string& value)
+  {
+    if (value.empty() || value == "true") return true;
+    if (value == "false") return false;
+    throw std::runtime_error("Invalid runtime environment.");
   }
 
   class SignalHandlers
@@ -105,30 +113,41 @@ int main()
   {
     using namespace Chess::Backend;
     const auto port_text = environment("ICHESS_PORT", false);
-    const auto session_path = environment("ICHESS_SESSION_FILE", true);
+    const auto session_path = environment("ICHESS_SESSION_FILE", false);
     const auto database_path = environment("ICHESS_DB_PATH", true);
     const auto revocation_path = environment("ICHESS_REVOCATION_DB_PATH", true);
+    const auto account_path = environment("ICHESS_ACCOUNT_DB_PATH", true);
+    const bool allow_registration = parse_boolean(environment("ICHESS_ALLOW_REGISTRATION", false));
     const ServiceRuntimeConfig config{environment("ICHESS_PUBLIC_ORIGIN", true),
-      std::filesystem::path(std::u8string(session_path.begin(), session_path.end())),
+        session_path.empty() ? std::filesystem::path{}
+          : std::filesystem::path(std::u8string(session_path.begin(), session_path.end())),
       std::filesystem::path(std::u8string(database_path.begin(), database_path.end())),
       std::filesystem::path(std::u8string(revocation_path.begin(), revocation_path.end())),
+      std::filesystem::path(std::u8string(account_path.begin(), account_path.end())),
         port_text.empty() ? 8080 : parse_service_port(port_text)};
     validate_runtime_config(config);
     const auto revocation_utf8 = config.revocation_database_file.u8string();
     const std::string revocation_filename(revocation_utf8.begin(), revocation_utf8.end());
     auto revocations = std::make_shared<SqliteSessionRevocationStore>(revocation_filename);
+    const auto account_utf8 = config.account_database_file.u8string();
+    const std::string account_filename(account_utf8.begin(), account_utf8.end());
+    SqliteLocalAccountStore accounts(account_filename);
     SessionAuthenticator authenticator({config.public_origin}, std::chrono::system_clock::now,
                                        std::chrono::steady_clock::now, revocations);
-    load_preview_sessions(config.session_file, authenticator);
+    if (!config.session_file.empty()) load_preview_sessions(config.session_file, authenticator);
     const auto database_utf8 = config.database_file.u8string();
     SqliteDatabase database(std::string(database_utf8.begin(), database_utf8.end()));
     SqliteGameApplication application(database);
-    if (!application.is_ready() || !revocations->is_ready())
+    if (!application.is_ready() || !revocations->is_ready() || !accounts.is_ready())
       throw std::runtime_error("Storage initialization failed.");
     ServiceRateLimiter limiter;
     RuntimeObserver observer([](std::string event) { std::clog << event << '\n'; });
     httplib::Server server;
-    register_http_api(server, authenticator, application, {}, [revocations] { return revocations->is_ready(); });
+    HttpApiConfig api_config;
+    api_config.allow_registration = allow_registration;
+    register_http_api(server, authenticator, application, api_config,
+      [revocations, &accounts] { return revocations->is_ready() && accounts.is_ready(); },
+      &accounts, &authenticator);
     configure_service_runtime(server, authenticator, limiter, &observer);
     if (!server.bind_to_port("127.0.0.1", config.port)) throw std::runtime_error("Listener initialization failed.");
     SignalHandlers signals;

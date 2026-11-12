@@ -32,6 +32,7 @@ namespace Chess::Backend
       std::filesystem::path session_file;
       std::filesystem::path database_file;
       std::filesystem::path revocation_database_file;
+      std::filesystem::path account_database_file;
       int port = 8080;
   };
 
@@ -48,6 +49,8 @@ namespace Chess::Backend
       std::size_t create_requests = 10;
       std::size_t join_requests = 20;
       std::size_t mutation_requests = 60;
+      std::size_t login_requests = 20;
+      std::size_t registration_requests = 5;
   };
 
   class ServiceRateLimiter
@@ -58,6 +61,7 @@ namespace Chess::Backend
       bool allow_peer(const std::string& peer);
       bool allow_principal(const Principal& principal);
       bool allow_operation(const Principal& principal, std::string_view method, std::string_view path);
+      bool allow_auth_attempt(const std::string& peer, bool registration);
       std::pair<std::size_t, std::size_t> state_size() const;
       std::chrono::seconds retry_after() const;
 
@@ -76,6 +80,7 @@ namespace Chess::Backend
       Buckets peers_;
       Buckets principals_;
       std::array<Buckets, 3> operations_;
+      std::array<Buckets, 2> auth_attempts_;
   };
 
   enum class RuntimeMethod { Other, Get, Head, Post, Put, Patch, Delete, Options };

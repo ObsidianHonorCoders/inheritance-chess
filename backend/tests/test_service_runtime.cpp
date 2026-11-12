@@ -81,8 +81,11 @@ namespace
       EXPECT_THROW(parse_service_port(port), std::runtime_error);
     const auto root = std::filesystem::temp_directory_path();
     ServiceRuntimeConfig config{"https://chess.test", root / "private-preview.json", root / "preview.sqlite",
-                  root / "preview-revocations.sqlite", 8080};
+                  root / "preview-revocations.sqlite", root / "preview-accounts.sqlite", 8080};
     EXPECT_NO_THROW(validate_runtime_config(config));
+    config.session_file.clear();
+    EXPECT_NO_THROW(validate_runtime_config(config));
+    config.session_file = root / "private-preview.json";
     config.database_file = ":memory:";
     EXPECT_THROW(validate_runtime_config(config), std::runtime_error);
     config.database_file = "relative.sqlite";
@@ -99,6 +102,9 @@ namespace
     config.revocation_database_file = root / "separate" / "revocations.sqlite";
     EXPECT_THROW(validate_runtime_config(config), std::runtime_error);
     config.revocation_database_file = root / "preview-revocations.sqlite";
+    config.account_database_file = config.revocation_database_file;
+    EXPECT_THROW(validate_runtime_config(config), std::runtime_error);
+    config.account_database_file = root / "preview-accounts.sqlite";
     config.port = 0;
     EXPECT_THROW(validate_runtime_config(config), std::runtime_error);
     config.port = 8080;
@@ -167,6 +173,23 @@ namespace
     EXPECT_FALSE(limiter.allow_operation(Principal{"bob"}, "POST", "/api/v1/games"));
     now += config.window;
     EXPECT_TRUE(limiter.allow_operation(Principal{"bob"}, "POST", "/api/v1/games"));
+  }
+
+  TEST(ServiceRateLimiterTest, AnonymousLoginAndRegistrationBudgetsAreIndependent)
+  {
+    auto now = std::chrono::steady_clock::time_point{};
+    RateLimitConfig config;
+    config.login_requests = 2;
+    config.registration_requests = 1;
+    ServiceRateLimiter limiter(config, [&] { return now; });
+    EXPECT_TRUE(limiter.allow_auth_attempt("127.0.0.1", false));
+    EXPECT_TRUE(limiter.allow_auth_attempt("127.0.0.1", false));
+    EXPECT_FALSE(limiter.allow_auth_attempt("127.0.0.1", false));
+    EXPECT_TRUE(limiter.allow_auth_attempt("127.0.0.1", true));
+    EXPECT_FALSE(limiter.allow_auth_attempt("127.0.0.1", true));
+    EXPECT_TRUE(limiter.allow_auth_attempt("127.0.0.2", true));
+    now += config.window;
+    EXPECT_TRUE(limiter.allow_auth_attempt("127.0.0.1", true));
   }
 
   class RunningTestServer

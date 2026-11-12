@@ -790,4 +790,115 @@ namespace
     const auto retry = application.create_game(Principal{"owner"}, {}, "0123456789abcdef");
     EXPECT_TRUE(std::holds_alternative<GameSnapshot>(retry));
   }
+
+  TEST(LocalAuthApiTest, RegistrationLoginAndLogoutUseSecureServerSessions)
+  {
+    const auto account_path = std::filesystem::temp_directory_path()
+        / ("ichess-auth-api-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".sqlite");
+    {
+      SqliteLocalAccountStore accounts(account_path.string());
+      ASSERT_TRUE(accounts.is_ready());
+      SessionAuthenticator authenticator({"https://chess.example.test"});
+      SqliteDatabase game_database(":memory:");
+      SqliteGameApplication application(game_database);
+      httplib::Server server;
+      register_http_api(server, authenticator, application, {}, {}, &accounts, &authenticator);
+      const int port = server.bind_to_any_port("127.0.0.1");
+      ASSERT_GT(port, 0);
+      std::thread server_thread([&] { server.listen_after_bind(); });
+      server.wait_until_ready();
+      httplib::Client client("127.0.0.1", port);
+      client.set_connection_timeout(2);
+      client.set_read_timeout(4);
+      const std::string body = R"({"username":"Alice.Player","password":"a sufficiently long password"})";
+      const httplib::Headers origin{{"Origin", "https://chess.example.test"}};
+
+      const auto missing_origin = client.Post("/api/v1/auth/register", body, "application/json");
+      ASSERT_TRUE(missing_origin);
+      EXPECT_EQ(missing_origin->status, 403);
+      const auto foreign_origin = client.Post("/api/v1/auth/login", {{"Origin", "https://evil.test"}}, body,
+                       "application/json");
+      ASSERT_TRUE(foreign_origin);
+      EXPECT_EQ(foreign_origin->status, 403);
+
+      const auto registered = client.Post("/api/v1/auth/register", origin, body, "application/json");
+      ASSERT_TRUE(registered);
+      ASSERT_EQ(registered->status, 201);
+      EXPECT_NE(registered->get_header_value("Set-Cookie").find("__Host-ichess_session="), std::string::npos);
+      EXPECT_NE(registered->get_header_value("Set-Cookie").find("; Secure; HttpOnly; SameSite=Strict"), std::string::npos);
+      EXPECT_EQ(Json::parse(registered->body).at("csrfToken").get<std::string>().size(), 64U);
+
+      const auto duplicate = client.Post("/api/v1/auth/register", origin, body, "application/json");
+      ASSERT_TRUE(duplicate);
+      EXPECT_EQ(duplicate->status, 409);
+
+        const auto invalid = client.Post("/api/v1/auth/login", origin,
+          R"({"username":"alice.player","password":"a different long password"})", "application/json");
+      ASSERT_TRUE(invalid);
+      EXPECT_EQ(invalid->status, 401);
+      EXPECT_EQ(Json::parse(invalid->body).at("detail"), "Username or password is incorrect.");
+
+        const auto logged_in = client.Post("/api/v1/auth/login", origin,
+          R"({"username":"ALICE.PLAYER","password":"a sufficiently long password"})", "application/json");
+      ASSERT_TRUE(logged_in);
+      ASSERT_EQ(logged_in->status, 200);
+      const auto login_cookie = logged_in->get_header_value("Set-Cookie");
+      const auto semicolon = login_cookie.find(';');
+      ASSERT_NE(semicolon, std::string::npos);
+      const auto csrf = Json::parse(logged_in->body).at("csrfToken").get<std::string>();
+      httplib::Headers logout_headers{{"Cookie", login_cookie.substr(0, semicolon)},
+          {"Origin", "https://chess.example.test"}, {"X-CSRF-Token", csrf}};
+      const auto logged_out = client.Post("/api/v1/auth/logout", logout_headers, "", "");
+      ASSERT_TRUE(logged_out);
+      EXPECT_EQ(logged_out->status, 200);
+      EXPECT_NE(logged_out->get_header_value("Set-Cookie").find("Max-Age=0"), std::string::npos);
+      const auto old_session = client.Get("/api/v1/session", logout_headers);
+      ASSERT_TRUE(old_session);
+      EXPECT_EQ(old_session->status, 401);
+
+      server.stop();
+      server_thread.join();
+    }
+    std::error_code cleanup_error;
+    std::filesystem::remove(account_path, cleanup_error);
+    std::filesystem::remove(account_path.string() + "-wal", cleanup_error);
+    std::filesystem::remove(account_path.string() + "-shm", cleanup_error);
+  }
+
+  TEST(LocalAuthApiTest, RegistrationCanBeClosedWhileLoginRemainsAvailable)
+  {
+    const auto account_path = std::filesystem::temp_directory_path()
+        / ("ichess-auth-closed-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".sqlite");
+    {
+      SqliteLocalAccountStore accounts(account_path.string());
+      SessionAuthenticator authenticator({"https://chess.example.test"});
+      SqliteDatabase game_database(":memory:");
+      SqliteGameApplication application(game_database);
+      HttpApiConfig config;
+      config.allow_registration = false;
+      httplib::Server server;
+      register_http_api(server, authenticator, application, config, {}, &accounts, &authenticator);
+      const int port = server.bind_to_any_port("127.0.0.1");
+      ASSERT_GT(port, 0);
+      std::thread server_thread([&] { server.listen_after_bind(); });
+      server.wait_until_ready();
+      httplib::Client client("127.0.0.1", port);
+      client.set_read_timeout(4);
+        const httplib::Headers origin{{"Origin", "https://chess.example.test"}};
+        const auto registration = client.Post("/api/v1/auth/register", origin,
+          R"({"username":"alice","password":"a sufficiently long password"})", "application/json");
+      ASSERT_TRUE(registration);
+      EXPECT_EQ(registration->status, 404);
+        const auto login = client.Post("/api/v1/auth/login", origin,
+          R"({"username":"alice","password":"a sufficiently long password"})", "application/json");
+      ASSERT_TRUE(login);
+      EXPECT_EQ(login->status, 401);
+      server.stop();
+      server_thread.join();
+    }
+    std::error_code cleanup_error;
+    std::filesystem::remove(account_path, cleanup_error);
+    std::filesystem::remove(account_path.string() + "-wal", cleanup_error);
+    std::filesystem::remove(account_path.string() + "-shm", cleanup_error);
+  }
 } // namespace

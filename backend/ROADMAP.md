@@ -2,7 +2,7 @@
 
 ## Current State
 
-The repository has seven C++20 chess-core libraries, two console executables, an HTTP adapter library, and a loopback-only `ichess_service` private-preview executable. `SqliteGameApplication` implements all untimed game operations with transactional versions and retries. Concrete server-side sessions, bounded queues/rate budgets, strict HTTP validation, schema checks, and live readiness are implemented and covered by tests. Public account onboarding and timed games are not implemented. See [DEPLOYMENT.md](DEPLOYMENT.md) for the private-preview boundary.
+The repository has seven C++20 chess-core libraries, two console executables, an HTTP adapter library, and a loopback-only `ichess_service` executable. `SqliteGameApplication` implements all untimed game operations with transactional versions and retries. Local username/password registration, login and logout, concrete server-side sessions, bounded queues/rate budgets, strict HTTP validation, schema checks, and live readiness are implemented and covered by tests. Password recovery, email verification, MFA, social providers, and timed games are not implemented. See [DEPLOYMENT.md](DEPLOYMENT.md) for the supported boundary.
 
 The core `ChessGameHandler` owns mutable board, timer, draw-offer, and repetition state. Do not share it concurrently between requests. Persist the initial FEN and ordered move log; reconstructing from the latest FEN alone loses repetition history. Keep public game identifiers separate from the core's identifiers.
 
@@ -23,7 +23,7 @@ Acceptance: competing writes to one version yield exactly one mutation; retries 
 
 ## 2. Verified Browser Sessions
 
-Implemented for private preview: bounded opaque server-side sessions, expiry, optional durable revocation across restart, strict cookies, exact Origin and CSRF verification, and owner-restricted credential-file import. No public login route or trusted identity-header shortcut exists. Remaining: provider-backed onboarding, login/logout routes, rotation, and protected token representations for persistent account sessions. File-provisioned identities are operator assignments, not OIDC assertions.
+Implemented: case-insensitive local usernames, 12-1024 byte passwords hashed with per-account salted PBKDF2-HMAC-SHA256, registration/login/logout routes, bounded per-peer auth attempt budgets, secure cookies, CSRF/Origin verification, in-memory sessions, and optional durable digest-only revocation. Password reset/recovery, email verification, MFA, and account lifecycle administration remain open policy/product work. Provider login is optional and can later issue the same application session through `ILoginSessionManager`. File-provisioned preview identities remain supported as operator assignments, not OIDC assertions.
 
 - Choose an established OIDC provider for public accounts or a verified Cloudflare Access integration for a private preview. Do not implement an identity-header bypass.
 - Implement `IRequestAuthenticator` against expiring, revocable server-side sessions. Use opaque random tokens and store only protected token representations. Set `__Host-ichess_session` with `Secure`, `HttpOnly`, `Path=/`, no `Domain`, and a deliberate `SameSite` policy.

@@ -277,25 +277,41 @@ namespace Chess::Backend
   {
     namespace fs = std::filesystem;
     if (!SessionAuthenticator::valid_public_origin(config.public_origin) || config.port < 1 || config.port > 65535
-        || !config.session_file.is_absolute() || !config.database_file.is_absolute()
-      || !config.revocation_database_file.is_absolute() || config.session_file.filename().empty()
-      || config.database_file.filename().empty() || config.revocation_database_file.filename().empty()
-      || config.database_file.lexically_normal() == config.session_file.lexically_normal()
+      || (!config.session_file.empty()
+        && (!config.session_file.is_absolute() || config.session_file.filename().empty()))
+      || !config.database_file.is_absolute()
+      || !config.revocation_database_file.is_absolute()
+      || !config.account_database_file.is_absolute() || config.database_file.filename().empty()
+      || config.revocation_database_file.filename().empty() || config.account_database_file.filename().empty()
+      || (!config.session_file.empty()
+        && config.database_file.lexically_normal() == config.session_file.lexically_normal())
       || config.database_file.lexically_normal() == config.revocation_database_file.lexically_normal()
-      || config.session_file.lexically_normal() == config.revocation_database_file.lexically_normal()
+      || config.database_file.lexically_normal() == config.account_database_file.lexically_normal()
+      || (!config.session_file.empty()
+        && config.session_file.lexically_normal() == config.revocation_database_file.lexically_normal())
+      || (!config.session_file.empty()
+        && config.session_file.lexically_normal() == config.account_database_file.lexically_normal())
+      || config.revocation_database_file.lexically_normal() == config.account_database_file.lexically_normal()
       || config.database_file.parent_path().lexically_normal()
-        != config.revocation_database_file.parent_path().lexically_normal()) invalid_configuration();
+        != config.revocation_database_file.parent_path().lexically_normal()
+      || config.database_file.parent_path().lexically_normal()
+        != config.account_database_file.parent_path().lexically_normal()) invalid_configuration();
     const auto database = config.database_file.lexically_normal();
     const auto revocations = config.revocation_database_file.lexically_normal();
+    const auto accounts = config.account_database_file.lexically_normal();
     if (database.filename() == "." || database.filename() == ".."
       || revocations.filename() == "." || revocations.filename() == ".."
+      || accounts.filename() == "." || accounts.filename() == ".."
       || database.string().find(':', 2) != std::string::npos
-      || revocations.string().find(':', 2) != std::string::npos) invalid_configuration();
+      || revocations.string().find(':', 2) != std::string::npos
+      || accounts.string().find(':', 2) != std::string::npos) invalid_configuration();
 #ifdef _WIN32
     if (database.native().find_first_of(L"?*\"<>|") != std::wstring::npos
       || revocations.native().find_first_of(L"?*\"<>|") != std::wstring::npos
+      || accounts.native().find_first_of(L"?*\"<>|") != std::wstring::npos
         || database.native().compare(0, 2, L"\\\\") == 0
       || revocations.native().compare(0, 2, L"\\\\") == 0
+      || accounts.native().compare(0, 2, L"\\\\") == 0
         || GetDriveTypeW(database.root_path().c_str()) != DRIVE_FIXED) invalid_configuration();
 #endif
     fs::path current;
@@ -326,13 +342,30 @@ namespace Chess::Backend
 #endif
       }
     }
+    current.clear();
+    for (const auto& part : accounts)
+    {
+      current /= part;
+      if (fs::exists(current))
+      {
+        if (fs::is_symlink(fs::symlink_status(current))) invalid_configuration();
+#ifdef _WIN32
+        const auto attributes = GetFileAttributesW(current.c_str());
+        if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+          invalid_configuration();
+#endif
+      }
+    }
     if (!fs::is_directory(database.parent_path())
         || (fs::exists(database) && !fs::is_regular_file(database))
-        || (fs::exists(revocations) && !fs::is_regular_file(revocations))) invalid_configuration();
+        || (fs::exists(revocations) && !fs::is_regular_file(revocations))
+        || (fs::exists(accounts) && !fs::is_regular_file(accounts))) invalid_configuration();
     if (fs::exists(database) && fs::exists(config.session_file) && fs::equivalent(database, config.session_file))
       invalid_configuration();
     if (fs::exists(revocations) && fs::exists(config.session_file)
       && fs::equivalent(revocations, config.session_file)) invalid_configuration();
+    if (fs::exists(accounts) && fs::exists(config.session_file)
+      && fs::equivalent(accounts, config.session_file)) invalid_configuration();
 #ifdef __linux__
     struct statfs info{};
   if (statfs(database.parent_path().c_str(), &info) != 0
@@ -351,6 +384,8 @@ namespace Chess::Backend
         || config_.create_requests == 0 || config_.create_requests > 1000000
         || config_.join_requests == 0 || config_.join_requests > 1000000
         || config_.mutation_requests == 0 || config_.mutation_requests > 1000000
+        || config_.login_requests == 0 || config_.login_requests > 1000000
+        || config_.registration_requests == 0 || config_.registration_requests > 1000000
         || config_.window.count() < 1 || config_.window > std::chrono::hours(1) || !clock_)
       invalid_configuration();
   }
@@ -405,6 +440,13 @@ namespace Chess::Backend
     if (suffix.find('/') == std::string_view::npos)
       return allow(operations_[1], principal.id, config_.max_principals, config_.join_requests);
     return allow(operations_[2], principal.id, config_.max_principals, config_.mutation_requests);
+  }
+
+  bool ServiceRateLimiter::allow_auth_attempt(const std::string& peer, bool registration)
+  {
+    const auto index = registration ? 1U : 0U;
+    const auto requests = registration ? config_.registration_requests : config_.login_requests;
+    return allow(auth_attempts_[index], peer, config_.max_peers, requests);
   }
 
   std::pair<std::size_t, std::size_t> ServiceRateLimiter::state_size() const
@@ -468,6 +510,18 @@ namespace Chess::Backend
       response.headers.erase("X-Request-ID");
       response.set_header("X-Request-ID", correlation_id(request_scope.id));
       if (!limiter.allow_peer(request.remote_addr))
+      {
+        rate_limited(response, limiter.retry_after());
+        return httplib::Server::HandlerResponse::Handled;
+      }
+      if (request.method == "POST" && request.path == "/api/v1/auth/login"
+          && !limiter.allow_auth_attempt(request.remote_addr, false))
+      {
+        rate_limited(response, limiter.retry_after());
+        return httplib::Server::HandlerResponse::Handled;
+      }
+      if (request.method == "POST" && request.path == "/api/v1/auth/register"
+          && !limiter.allow_auth_attempt(request.remote_addr, true))
       {
         rate_limited(response, limiter.retry_after());
         return httplib::Server::HandlerResponse::Handled;

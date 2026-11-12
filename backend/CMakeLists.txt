@@ -41,6 +41,7 @@ add_library(ichess_backend STATIC
     src/sqlite_database.cpp
     src/sqlite_game_application.cpp
     src/session_authenticator.cpp
+    src/local_account_store.cpp
     src/session_revocation_store.cpp
     src/service_runtime.cpp
     src/execution_budget.cpp

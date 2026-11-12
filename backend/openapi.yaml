@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Inheritance Chess API
   version: 1.0.0
-  description: Versioned game service contract. Security and deployment requirements are in docs/SERVICE_CONTRACT.md.
+  description: Versioned game service with local username/password authentication. Social identity providers may be added later. Security and deployment requirements are in docs/SERVICE_CONTRACT.md.
 servers:
   - url: https://chess.example.com
     description: Replace with the deployed same-origin hostname.
@@ -58,6 +58,88 @@ paths:
                 $ref: '#/components/schemas/SessionInfo'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /api/v1/auth/register:
+    post:
+      operationId: registerLocalAccount
+      summary: Create a local account and start a session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocalCredentials'
+      responses:
+        '201':
+          description: Account created and session established.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/auth/login:
+    post:
+      operationId: loginLocalAccount
+      summary: Authenticate a local account and start a session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocalCredentials'
+      responses:
+        '200':
+          description: Session established.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/v1/auth/logout:
+    post:
+      operationId: logoutLocalSession
+      summary: Revoke the current session
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: Session revoked and cookie expired.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/v1/games:
     post:
       operationId: createGame
@@ -493,6 +575,33 @@ components:
           type: string
           minLength: 32
           maxLength: 256
+    LocalCredentials:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: '^[A-Za-z0-9._-]+$'
+        password:
+          type: string
+          minLength: 12
+          maxLength: 1024
+          format: password
+    AuthenticatedSession:
+      type: object
+      additionalProperties: false
+      required: [csrfToken, expires]
+      properties:
+        csrfToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+        expires:
+          type: integer
+          format: int64
     CreateGameRequest:
       type: object
       additionalProperties: false

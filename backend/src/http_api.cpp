@@ -398,6 +398,23 @@ namespace Chess::Backend
 
     bool valid_game_id(std::string_view game_id);
 
+    class PasswordWiper
+    {
+      public:
+        explicit PasswordWiper(std::string& value) : value_(value) {}
+        ~PasswordWiper()
+        {
+          volatile char* value = value_.data();
+          for (std::size_t index = 0; index < value_.size(); ++index) value[index] = 0;
+        }
+
+        PasswordWiper(const PasswordWiper&) = delete;
+        PasswordWiper& operator=(const PasswordWiper&) = delete;
+
+      private:
+        std::string& value_;
+    };
+
     void write_snapshot_result(httplib::Response& response, Result<GameSnapshot> result, int success_status,
                                bool set_location = false)
     {
@@ -462,7 +479,9 @@ namespace Chess::Backend
                          const IRequestAuthenticator& authenticator,
                          IGameApplication& application,
                          const HttpApiConfig& config,
-                         std::function<bool()> additional_readiness)
+                         std::function<bool()> additional_readiness,
+                         ILocalAccountStore* accounts,
+                         ILoginSessionManager* sessions)
   {
     server.set_payload_max_length(std::clamp(config.max_request_body_bytes, std::size_t{1}, std::size_t{64 * 1024}));
     server.set_read_timeout(std::clamp(config.read_timeout_seconds, std::time_t{1}, std::time_t{60}));
@@ -552,6 +571,119 @@ namespace Chess::Backend
       }
       write_json(response, 200, Json{{"csrfToken", csrf_token}});
     });
+    if (accounts != nullptr && sessions != nullptr)
+    {
+      const auto credentials = [](const httplib::Request& request, httplib::Response& response,
+                                  std::string& username, std::string& password) {
+        Json body;
+        if (!parse_json_body(request, response, body, false)) return false;
+        if (!has_only_fields(body, {"username", "password"}) || body.size() != 2
+            || !body["username"].is_string() || !body["password"].is_string())
+        {
+          write_problem(response, 400, "invalid_credentials", "Bad Request", "Username and password are required.");
+          return false;
+        }
+        username = body["username"].get<std::string>();
+        password = body["password"].get<std::string>();
+        if (username.size() < 3 || username.size() > 32 || password.size() < 12 || password.size() > 1024
+            || password.find('\0') != std::string::npos)
+        {
+          write_problem(response, 400, "invalid_credentials", "Bad Request", "Username or password is invalid.");
+          return false;
+        }
+        for (char& character : username)
+        {
+          if (character >= 'A' && character <= 'Z') character = static_cast<char>(character + ('a' - 'A'));
+          else if (!((character >= 'a' && character <= 'z') || (character >= '0' && character <= '9')
+                     || character == '.' || character == '_' || character == '-'))
+          {
+            write_problem(response, 400, "invalid_credentials", "Bad Request", "Username or password is invalid.");
+            return false;
+          }
+        }
+        return true;
+      };
+      const auto complete_login = [](const std::optional<SessionCredentials>& issued,
+                                     httplib::Response& response, int status) {
+        if (!issued)
+        {
+          write_problem(response, 503, "session_capacity", "Service Unavailable",
+                        "A session could not be created.");
+          return;
+        }
+        response.set_header("Set-Cookie", issued->set_cookie);
+        write_json(response, status, Json{{"csrfToken", issued->csrf_token}, {"expires", issued->expires}});
+      };
+        if (config.allow_registration)
+        {
+          server.Post("/api/v1/auth/register", [accounts, sessions, credentials, complete_login](
+              const httplib::Request& request, httplib::Response& response) {
+            if (!validate_unique_headers(request, response)) return;
+            if (!sessions->accepts_login_origin(request))
+            {
+              write_problem(response, 403, "request_forbidden", "Forbidden", "The request could not be verified.");
+              return;
+            }
+            std::string username;
+            std::string password;
+            PasswordWiper wipe_password(password);
+            if (!credentials(request, response, username, password)) return;
+            switch (accounts->create_account(username, password))
+            {
+              case AccountCreateResult::AlreadyExists:
+                write_problem(response, 409, "account_unavailable", "Conflict", "The account could not be created.");
+                return;
+              case AccountCreateResult::Unavailable:
+                write_problem(response, 503, "account_service_unavailable", "Service Unavailable",
+                              "The account could not be created.");
+                return;
+              case AccountCreateResult::Created:
+                break;
+            }
+            complete_login(sessions->issue_session(Principal{username}), response, 201);
+          });
+        }
+      server.Post("/api/v1/auth/login", [accounts, sessions, credentials, complete_login](
+          const httplib::Request& request, httplib::Response& response) {
+        if (!validate_unique_headers(request, response)) return;
+        if (!sessions->accepts_login_origin(request))
+        {
+          write_problem(response, 403, "request_forbidden", "Forbidden", "The request could not be verified.");
+          return;
+        }
+        std::string username;
+        std::string password;
+          PasswordWiper wipe_password(password);
+        if (!credentials(request, response, username, password)) return;
+        const auto principal = accounts->authenticate(username, password);
+        if (!principal)
+        {
+          if (!accounts->is_ready())
+          {
+            write_problem(response, 503, "account_service_unavailable", "Service Unavailable",
+                          "Authentication is temporarily unavailable.");
+            return;
+          }
+          write_problem(response, 401, "invalid_credentials", "Unauthorized", "Username or password is incorrect.");
+          return;
+        }
+        complete_login(sessions->issue_session(*principal), response, 200);
+      });
+      server.Post("/api/v1/auth/logout", [&authenticator, sessions](
+          const httplib::Request& request, httplib::Response& response) {
+        Principal principal;
+        if (!authenticate(request, authenticator, true, response, principal)) return;
+        if (!validate_empty_body(request, response)) return;
+        if (!sessions->revoke_request_session(request))
+        {
+          write_problem(response, 503, "session_revocation_failed", "Service Unavailable",
+                        "The session could not be ended.");
+          return;
+        }
+        response.set_header("Set-Cookie", "__Host-ichess_session=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0");
+        write_json(response, 200, Json{{"status", "ok"}});
+      });
+    }
     server.Post("/api/v1/games", [&authenticator, &application](const httplib::Request& request, httplib::Response& response) {
       Principal principal;
       if (!authenticate_request(request, authenticator, true, response, principal))
