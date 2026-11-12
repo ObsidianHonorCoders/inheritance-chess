@@ -1,5 +1,6 @@
 #include "sqlite_game_application.h"
 
+#include "execution_budget.h"
 #include "game_handler.h"
 #include "translation_unit.h"
 #include <nlohmann/json.hpp>
@@ -29,6 +30,7 @@ namespace Chess::Backend
       public:
         Statement(sqlite3* database, const char* sql)
         {
+          ExecutionBudget::checkpoint();
           if (sqlite3_prepare_v2(database, sql, -1, &statement_, nullptr) != SQLITE_OK)
           {
             statement_ = nullptr;
@@ -50,7 +52,11 @@ namespace Chess::Backend
     {
       public:
         explicit Transaction(sqlite3* database, bool write = true)
-          : database_(database), active_(sqlite3_exec(database, write ? "BEGIN IMMEDIATE" : "BEGIN", nullptr, nullptr, nullptr) == SQLITE_OK) {}
+          : database_(database), active_(false)
+        {
+          ExecutionBudget::checkpoint();
+          active_ = sqlite3_exec(database, write ? "BEGIN IMMEDIATE" : "BEGIN", nullptr, nullptr, nullptr) == SQLITE_OK;
+        }
         ~Transaction()
         {
           if (active_)
@@ -60,6 +66,7 @@ namespace Chess::Backend
         }
         bool commit()
         {
+          ExecutionBudget::checkpoint();
           if (!active_ || sqlite3_exec(database_, "COMMIT", nullptr, nullptr, nullptr) != SQLITE_OK)
           {
             return false;
@@ -168,6 +175,7 @@ namespace Chess::Backend
       std::array<int, 2> pieces{};
       for (const auto& piece : grid.get_all_piece_properties())
       {
+        ExecutionBudget::checkpoint();
         const std::size_t color = piece.color == Chess::Color::WHITE ? 0 : 1;
         ++pieces[color];
         if (piece.type == Chess::PieceType::KING)
@@ -246,15 +254,18 @@ namespace Chess::Backend
 
     std::string initial_status(const Chess::Grid& grid)
     {
+      ExecutionBudget::checkpoint();
       Chess::ChessBoardManager board;
       if (board.is_checkmate(grid, grid.current_turn))
       {
         return "checkmate";
       }
+      ExecutionBudget::checkpoint();
       if (board.is_stalemate(grid, grid.current_turn))
       {
         return "stalemate";
       }
+      ExecutionBudget::checkpoint();
       switch (board.get_draw_reason(grid, grid.current_turn))
       {
       case Chess::DrawReason::INSUFFICIENT_MATERIAL: return "draw_insufficient_material";
@@ -269,6 +280,7 @@ namespace Chess::Backend
     Result<GameSnapshot> load_snapshot(sqlite3* database, const Principal& principal, const std::string& game_id,
                        Chess::ChessGameHandler* restored = nullptr)
     {
+      ExecutionBudget::checkpoint();
       Statement game_query(database,
                            "SELECT white_principal, black_principal, initial_fen, version, status, updated_at "
                            "FROM games WHERE game_id = ?1");
@@ -335,6 +347,10 @@ namespace Chess::Backend
           return internal_error();
         }
       }
+      catch (const ExecutionDeadlineExceeded&)
+      {
+        throw;
+      }
       catch (...)
       {
         return internal_error();
@@ -374,6 +390,7 @@ namespace Chess::Backend
       int move_step = SQLITE_OK;
       while ((move_step = sqlite3_step(move_query.get())) == SQLITE_ROW)
       {
+        ExecutionBudget::checkpoint();
         if (move_count >= maximum_plies)
         {
           return error(409, "history_limit", "Conflict", "The game exceeds the supported move history limit.");
@@ -392,6 +409,7 @@ namespace Chess::Backend
         bool applied = false;
         for (const auto& move : handler.get_legal_moves())
         {
+          ExecutionBudget::checkpoint();
           if (translator.move_to_algebraic(move, handler.get_current_grid()) == uci)
           {
             applied = handler.make_move(move);
@@ -404,6 +422,7 @@ namespace Chess::Backend
         }
         ++move_count;
       }
+      ExecutionBudget::checkpoint();
       if (move_step != SQLITE_DONE)
       {
         return internal_error();
@@ -429,10 +448,12 @@ namespace Chess::Backend
       {
         for (const auto& move : handler.get_legal_moves())
         {
+          ExecutionBudget::checkpoint();
           snapshot.legal_moves.push_back(LegalMove{translator.move_to_algebraic(move, handler.get_current_grid()),
                                                    translator.move_to_san(move, handler.get_current_grid())});
         }
       }
+      ExecutionBudget::checkpoint();
       return snapshot;
     }
 
@@ -441,6 +462,7 @@ namespace Chess::Backend
       Json legal_moves = Json::array();
       for (const auto& move : snapshot.legal_moves)
       {
+        ExecutionBudget::checkpoint();
         legal_moves.push_back(Json{{"uci", move.uci}, {"san", move.san}});
       }
       return Json{{"gameId", snapshot.game_id}, {"version", snapshot.version}, {"fen", snapshot.fen},
@@ -470,6 +492,7 @@ namespace Chess::Backend
       snapshot.server_time = value.at("serverTime").get<std::string>();
       for (const auto& move : value.at("legalMoves"))
       {
+        ExecutionBudget::checkpoint();
         snapshot.legal_moves.push_back(LegalMove{move.at("uci").get<std::string>(), move.at("san").get<std::string>()});
       }
       return snapshot;
@@ -486,6 +509,7 @@ namespace Chess::Backend
                                  std::uint64_t expected_version, const std::string& key, Operation operation,
                                  const std::string& uci = {})
     {
+      ExecutionBudget::checkpoint();
       if (!owner.is_ready())
       {
         return storage_unavailable();
@@ -578,6 +602,10 @@ namespace Chess::Backend
           }
           return snapshot;
         }
+        catch (const ExecutionDeadlineExceeded&)
+        {
+          throw;
+        }
         catch (...)
         {
           return internal_error();
@@ -636,6 +664,7 @@ namespace Chess::Backend
         std::string san;
         for (const auto& move : handler.get_legal_moves())
         {
+          ExecutionBudget::checkpoint();
           if (translator.move_to_algebraic(move, handler.get_current_grid()) == uci)
           {
             san = translator.move_to_san(move, handler.get_current_grid());
@@ -725,12 +754,14 @@ namespace Chess::Backend
 
   bool SqliteGameApplication::is_ready() const
   {
+    ExecutionBudget::checkpoint();
     return database_.is_ready();
   }
 
   Result<GameSnapshot> SqliteGameApplication::create_game(const Principal& principal, const CreateGameCommand& command,
                                                            const std::string& idempotency_key)
   {
+    ExecutionBudget::checkpoint();
     if (!database_.is_ready())
     {
       return storage_unavailable();
@@ -758,6 +789,10 @@ namespace Chess::Backend
       {
         return error(422, "invalid_fen", "Unprocessable Content", "The initial position is invalid.");
       }
+    }
+    catch (const ExecutionDeadlineExceeded&)
+    {
+      throw;
     }
     catch (...)
     {
@@ -822,6 +857,10 @@ namespace Chess::Backend
         }
         return snapshot;
       }
+      catch (const ExecutionDeadlineExceeded&)
+      {
+        throw;
+      }
       catch (...)
       {
         return internal_error();
@@ -878,6 +917,7 @@ namespace Chess::Backend
 
   Result<GameSnapshot> SqliteGameApplication::get_game(const Principal& principal, const std::string& game_id) const
   {
+    ExecutionBudget::checkpoint();
     if (!database_.is_ready())
     {
       return storage_unavailable();
@@ -899,11 +939,13 @@ namespace Chess::Backend
   Result<GameSnapshot> SqliteGameApplication::join_game(const Principal& principal, const std::string& game_id,
                                                         std::uint64_t version, const std::string& key)
   {
+    ExecutionBudget::checkpoint();
     return mutate(database_, principal, game_id, version, key, Operation::join);
   }
 
   Result<LegalMoveList> SqliteGameApplication::get_legal_moves(const Principal& principal, const std::string& game_id) const
   {
+    ExecutionBudget::checkpoint();
     auto result = get_game(principal, game_id);
     if (const auto* failure = std::get_if<ApplicationError>(&result))
     {
@@ -916,6 +958,7 @@ namespace Chess::Backend
   Result<MovePage> SqliteGameApplication::get_move_history(const Principal& principal, const std::string& game_id,
                                                           std::uint64_t after_ply, std::uint64_t limit) const
   {
+    ExecutionBudget::checkpoint();
     if (!database_.is_ready())
     {
       return storage_unavailable();
@@ -947,6 +990,7 @@ namespace Chess::Backend
     int step = SQLITE_OK;
     while ((step = sqlite3_step(query.get())) == SQLITE_ROW)
     {
+      ExecutionBudget::checkpoint();
       if (page.moves.size() == limit)
       {
         page.next_after_ply = page.moves.back().ply;
@@ -965,24 +1009,28 @@ namespace Chess::Backend
   Result<GameSnapshot> SqliteGameApplication::submit_move(const Principal& principal, const std::string& game_id,
                                                           const MoveCommand& command, const std::string& key)
   {
+    ExecutionBudget::checkpoint();
     return mutate(database_, principal, game_id, command.expected_version, key, Operation::move, command.uci);
   }
 
   Result<GameSnapshot> SqliteGameApplication::resign(const Principal& principal, const std::string& game_id,
                                                     std::uint64_t version, const std::string& key)
   {
+    ExecutionBudget::checkpoint();
     return mutate(database_, principal, game_id, version, key, Operation::resign);
   }
 
   Result<GameSnapshot> SqliteGameApplication::offer_draw(const Principal& principal, const std::string& game_id,
                                                         std::uint64_t version, const std::string& key)
   {
+    ExecutionBudget::checkpoint();
     return mutate(database_, principal, game_id, version, key, Operation::offer_draw);
   }
 
   Result<GameSnapshot> SqliteGameApplication::accept_draw(const Principal& principal, const std::string& game_id,
                                                          std::uint64_t version, const std::string& key)
   {
+    ExecutionBudget::checkpoint();
     return mutate(database_, principal, game_id, version, key, Operation::accept_draw);
   }
 } // namespace Chess::Backend

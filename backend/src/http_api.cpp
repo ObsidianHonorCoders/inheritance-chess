@@ -1,4 +1,5 @@
 #include "http_api.h"
+#include "execution_budget.h"
 
 #include <nlohmann/json.hpp>
 #include <algorithm>
@@ -460,7 +461,8 @@ namespace Chess::Backend
   void register_http_api(httplib::Server& server,
                          const IRequestAuthenticator& authenticator,
                          IGameApplication& application,
-                         const HttpApiConfig& config)
+                         const HttpApiConfig& config,
+                         std::function<bool()> additional_readiness)
   {
     server.set_payload_max_length(std::clamp(config.max_request_body_bytes, std::size_t{1}, std::size_t{64 * 1024}));
     server.set_read_timeout(std::clamp(config.read_timeout_seconds, std::time_t{1}, std::time_t{60}));
@@ -485,7 +487,24 @@ namespace Chess::Backend
         write_problem(response, 404, "not_found", "Not Found", "The requested resource was not found.");
       }
     });
-    server.set_exception_handler([](const httplib::Request&, httplib::Response& response, std::exception_ptr) {
+    server.set_exception_handler([](const httplib::Request&, httplib::Response& response, std::exception_ptr failure) {
+      try
+      {
+        if (failure)
+        {
+          std::rethrow_exception(failure);
+        }
+      }
+      catch (const ExecutionDeadlineExceeded&)
+      {
+        response.headers.erase("ETag");
+        response.headers.erase("Location");
+        write_problem(response, 503, "execution_timeout", "Service Unavailable", "The request execution budget was exceeded.");
+        return;
+      }
+      catch (...)
+      {
+      }
       write_problem(response, 500, "internal_error", "Internal Server Error", "The request could not be completed.");
     });
 
@@ -496,12 +515,23 @@ namespace Chess::Backend
       }
       write_json(response, 200, Json{{"status", "ok"}});
     });
-    server.Get("/api/v1/health/ready", [&application](const httplib::Request& request, httplib::Response& response) {
+    server.Get("/api/v1/health/ready", [&application, additional_readiness](const httplib::Request& request,
+                                                                            httplib::Response& response) {
       if (!validate_unique_headers(request, response))
       {
         return;
       }
-      if (!application.is_ready())
+      bool dependencies_ready = false;
+      try
+      {
+        dependencies_ready = application.is_ready()
+            && (!additional_readiness || additional_readiness());
+      }
+      catch (...)
+      {
+        dependencies_ready = false;
+      }
+      if (!dependencies_ready)
       {
         write_problem(response, 503, "not_ready", "Service Unavailable", "A required service dependency is unavailable.");
         return;

@@ -41,7 +41,9 @@ add_library(ichess_backend STATIC
     src/sqlite_database.cpp
     src/sqlite_game_application.cpp
     src/session_authenticator.cpp
+    src/session_revocation_store.cpp
     src/service_runtime.cpp
+    src/execution_budget.cpp
 )
 
 target_include_directories(ichess_backend PUBLIC
@@ -63,6 +65,9 @@ set_property(TARGET ichess_backend PROPERTY CXX_STANDARD_REQUIRED ON)
 
 if(WIN32)
     target_link_libraries(ichess_backend PRIVATE bcrypt advapi32)
+elseif(NOT APPLE)
+    find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+    target_link_libraries(ichess_backend PRIVATE OpenSSL::Crypto)
 endif()
 
 add_executable(ichess_service src/server_main.cpp)

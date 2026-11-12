@@ -1,4 +1,5 @@
 #include "http_api.h"
+#include "session_revocation_store.h"
 #include "service_runtime.h"
 #include "sqlite_game_application.h"
 #include <cstdlib>
@@ -74,21 +75,29 @@ int main()
     const auto port_text = environment("ICHESS_PORT", false);
     const auto session_path = environment("ICHESS_SESSION_FILE", true);
     const auto database_path = environment("ICHESS_DB_PATH", true);
+    const auto revocation_path = environment("ICHESS_REVOCATION_DB_PATH", true);
     const ServiceRuntimeConfig config{environment("ICHESS_PUBLIC_ORIGIN", true),
       std::filesystem::path(std::u8string(session_path.begin(), session_path.end())),
       std::filesystem::path(std::u8string(database_path.begin(), database_path.end())),
+      std::filesystem::path(std::u8string(revocation_path.begin(), revocation_path.end())),
         port_text.empty() ? 8080 : parse_service_port(port_text)};
     validate_runtime_config(config);
-    SessionAuthenticator authenticator({config.public_origin});
+    const auto revocation_utf8 = config.revocation_database_file.u8string();
+    const std::string revocation_filename(revocation_utf8.begin(), revocation_utf8.end());
+    auto revocations = std::make_shared<SqliteSessionRevocationStore>(revocation_filename);
+    SessionAuthenticator authenticator({config.public_origin}, std::chrono::system_clock::now,
+                                       std::chrono::steady_clock::now, revocations);
     load_preview_sessions(config.session_file, authenticator);
     const auto database_utf8 = config.database_file.u8string();
     SqliteDatabase database(std::string(database_utf8.begin(), database_utf8.end()));
     SqliteGameApplication application(database);
-    if (!application.is_ready()) throw std::runtime_error("Storage initialization failed.");
+    if (!application.is_ready() || !revocations->is_ready())
+      throw std::runtime_error("Storage initialization failed.");
     ServiceRateLimiter limiter;
+    RuntimeObserver observer([](std::string event) { std::clog << event << '\n'; });
     httplib::Server server;
-    register_http_api(server, authenticator, application);
-    configure_service_runtime(server, authenticator, limiter);
+    register_http_api(server, authenticator, application, {}, [revocations] { return revocations->is_ready(); });
+    configure_service_runtime(server, authenticator, limiter, &observer);
     if (!server.bind_to_port("127.0.0.1", config.port)) throw std::runtime_error("Listener initialization failed.");
     SignalHandlers signals;
     ShutdownMonitor monitor(server, shutdown_requested);

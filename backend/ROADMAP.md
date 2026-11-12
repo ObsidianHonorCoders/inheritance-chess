@@ -23,7 +23,7 @@ Acceptance: competing writes to one version yield exactly one mutation; retries 
 
 ## 2. Verified Browser Sessions
 
-Implemented for private preview: bounded opaque server-side sessions, expiry and revocation, strict cookies, exact Origin and CSRF verification, and owner-restricted credential-file import. No public login route or trusted identity-header shortcut exists. Remaining: provider-backed onboarding, login/logout routes, rotation, durable revocation across restart, and protected token representations for persistent account sessions. File-provisioned identities are operator assignments, not OIDC assertions.
+Implemented for private preview: bounded opaque server-side sessions, expiry, optional durable revocation across restart, strict cookies, exact Origin and CSRF verification, and owner-restricted credential-file import. No public login route or trusted identity-header shortcut exists. Remaining: provider-backed onboarding, login/logout routes, rotation, and protected token representations for persistent account sessions. File-provisioned identities are operator assignments, not OIDC assertions.
 
 - Choose an established OIDC provider for public accounts or a verified Cloudflare Access integration for a private preview. Do not implement an identity-header bypass.
 - Implement `IRequestAuthenticator` against expiring, revocable server-side sessions. Use opaque random tokens and store only protected token representations. Set `__Host-ichess_session` with `Secure`, `HttpOnly`, `Path=/`, no `Domain`, and a deliberate `SameSite` policy.
@@ -34,7 +34,7 @@ Acceptance: expired, revoked, forged, and missing sessions fail closed; cross-or
 
 ## 3. Bounded Service Runtime
 
-Implemented: loopback-only service, strict startup configuration, protected preview credentials, four workers/64 queued connections, keep-alive/socket/body limits, bounded rate state, and signal-monitor shutdown. Remaining: per-operation budgets, execution/cancellation deadlines, structured request correlation/metrics, graceful-drain/load qualification, Linux CI, and overload capacity measurements. Socket-peer limits intentionally aggregate traffic through one proxy; forwarded IPs are not trusted.
+Implemented: loopback-only service, strict startup configuration, protected preview credentials, four workers/64 queued connections, keep-alive/socket/body limits, bounded global and per-operation rate state, cooperative execution budgets, redacted request correlation/aggregate metrics, storage readiness for both databases, and signal-monitor shutdown. Remaining: interruption of blocking operations, graceful-drain/load qualification, Linux deployment verification, and overload capacity measurements. CI builds/tests on Linux, Windows, and macOS. Socket-peer limits intentionally aggregate traffic through one proxy; forwarded IPs are not trusted.
 
 - Add a service executable that supplies the concrete adapters, validates startup configuration, and binds only to loopback or a private container interface.
 - Bound worker count, queued requests, active connections, keep-alive behavior, database waits, and execution time. Return controlled overload errors rather than growing memory without limit.

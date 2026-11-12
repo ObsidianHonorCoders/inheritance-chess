@@ -6,6 +6,7 @@
 #include <httplib.h>
 #include <cstddef>
 #include <ctime>
+#include <functional>
 
 namespace Chess::Backend
 {
@@ -21,7 +22,8 @@ namespace Chess::Backend
   void register_http_api(httplib::Server& server,
                          const IRequestAuthenticator& authenticator,
                          IGameApplication& application,
-                         const HttpApiConfig& config = {});
+                         const HttpApiConfig& config = {},
+                         std::function<bool()> additional_readiness = {});
 } // namespace Chess::Backend
 
 #endif // ICHESS_BACKEND_HTTP_API

@@ -80,7 +80,8 @@ namespace
     for (const auto* port : {"", "0", "65536", "-1", "+80", " 80", "80x", "99999999999"})
       EXPECT_THROW(parse_service_port(port), std::runtime_error);
     const auto root = std::filesystem::temp_directory_path();
-    ServiceRuntimeConfig config{"https://chess.test", root / "private-preview.json", root / "preview.sqlite", 8080};
+    ServiceRuntimeConfig config{"https://chess.test", root / "private-preview.json", root / "preview.sqlite",
+                  root / "preview-revocations.sqlite", 8080};
     EXPECT_NO_THROW(validate_runtime_config(config));
     config.database_file = ":memory:";
     EXPECT_THROW(validate_runtime_config(config), std::runtime_error);
@@ -91,6 +92,13 @@ namespace
     config.database_file = config.session_file;
     EXPECT_THROW(validate_runtime_config(config), std::runtime_error);
     config.database_file = root / "preview.sqlite";
+    config.revocation_database_file = config.database_file;
+    EXPECT_THROW(validate_runtime_config(config), std::runtime_error);
+    config.revocation_database_file = config.session_file;
+    EXPECT_THROW(validate_runtime_config(config), std::runtime_error);
+    config.revocation_database_file = root / "separate" / "revocations.sqlite";
+    EXPECT_THROW(validate_runtime_config(config), std::runtime_error);
+    config.revocation_database_file = root / "preview-revocations.sqlite";
     config.port = 0;
     EXPECT_THROW(validate_runtime_config(config), std::runtime_error);
     config.port = 8080;
@@ -137,6 +145,28 @@ namespace
     for (auto& thread : threads) thread.join();
     EXPECT_EQ(allowed.load(), 50);
     EXPECT_EQ(limiter.state_size().second, 1U);
+  }
+
+  TEST(ServiceRateLimiterTest, OperationBudgetsAreIndependentBoundedAndExpire)
+  {
+    auto now = std::chrono::steady_clock::time_point{};
+    RateLimitConfig config;
+    config.max_principals = 1;
+    config.create_requests = 1;
+    config.join_requests = 1;
+    config.mutation_requests = 1;
+    ServiceRateLimiter limiter(config, [&] { return now; });
+    const Principal alice{"alice"};
+    EXPECT_TRUE(limiter.allow_operation(alice, "POST", "/api/v1/games"));
+    EXPECT_FALSE(limiter.allow_operation(alice, "POST", "/api/v1/games"));
+    EXPECT_TRUE(limiter.allow_operation(alice, "POST", "/api/v1/games/first"));
+    EXPECT_FALSE(limiter.allow_operation(alice, "POST", "/api/v1/games/second"));
+    EXPECT_TRUE(limiter.allow_operation(alice, "POST", "/api/v1/games/first/moves"));
+    EXPECT_FALSE(limiter.allow_operation(alice, "POST", "/api/v1/games/second/resign"));
+    EXPECT_TRUE(limiter.allow_operation(alice, "GET", "/api/v1/games/first"));
+    EXPECT_FALSE(limiter.allow_operation(Principal{"bob"}, "POST", "/api/v1/games"));
+    now += config.window;
+    EXPECT_TRUE(limiter.allow_operation(Principal{"bob"}, "POST", "/api/v1/games"));
   }
 
   class RunningTestServer

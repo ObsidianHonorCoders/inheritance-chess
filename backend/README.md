@@ -13,7 +13,7 @@
 
 ## SQLite Application Foundation
 
-`SqliteDatabase` owns a full-mutex SQLite connection with foreign keys, defensive mode, untrusted schema, WAL, full synchronization, and a five-second busy timeout. Schema version 1 includes games, ordered moves, and idempotency records. Startup validates table columns, keys, foreign keys, and constraint behavior; unsupported or malformed schemas fail closed without repair. Live readiness checks storage access, version, constraint enforcement, and schema changes. DDL changes require reopening for revalidation. The database must outlive every `SqliteGameApplication` referencing it. Keep the database on local durable storage, not a network filesystem.
+`SqliteDatabase` owns a full-mutex SQLite connection with foreign keys, defensive mode, untrusted schema, WAL, full synchronization, and a one-second busy timeout. Schema version 1 includes games, ordered moves, and idempotency records. Startup validates table columns, keys, foreign keys, and constraint behavior; unsupported or malformed schemas fail closed without repair. Live readiness checks game storage and the service's revocation store. DDL changes require reopening for revalidation. The database must outlive every `SqliteGameApplication` referencing it. Keep the database on local durable storage, not a network filesystem.
 
 `SqliteGameApplication` implements all untimed game operations: create, snapshot, join, legal moves, paginated history, move submission, resignation, and draw offer/acceptance:
 
@@ -28,7 +28,7 @@ Timed creation still returns `422` until restart-safe clock behavior is implemen
 
 ## Private Preview Runtime
 
-`SessionAuthenticator` provides bounded in-memory, expiring, revocable sessions; random 256-bit opaque credentials and CSRF tokens; strict cookie parsing; exact HTTPS Origin checks; and secure cookie attributes for trusted session creation. Imported preview credentials are bearer secrets, not verified OIDC identities. No route accepts a principal header as authentication.
+`SessionAuthenticator` provides bounded in-memory, expiring sessions; random 256-bit opaque credentials and CSRF tokens; strict cookie parsing; exact HTTPS Origin checks; and secure cookie attributes for trusted session creation. Optional durable revocation stores only token digests in a separate SQLite database and is wired into the private-preview service. Imported preview credentials are bearer secrets, not verified OIDC identities. No route accepts a principal header as authentication.
 
 The service uses four workers and at most 64 queued connections, bounded keep-alive and socket timeouts, 16 KiB bodies, and bounded per-principal and socket-peer rate-limit state. Excess requests return `429` with `Retry-After`; a full connection queue closes excess connections. It ignores forwarded IP/identity headers. Behind one proxy, the socket-peer budget is shared by all users. A signal monitor stops the listener outside the signal handler and joins on shutdown. Request execution deadlines, detailed metrics, and load qualification remain release gates.
 

@@ -2,9 +2,14 @@
 #define ICHESS_BACKEND_SERVICE_RUNTIME
 
 #include "session_authenticator.h"
+#include <array>
 #include <atomic>
+#include <chrono>
 #include <csignal>
+#include <cstdint>
 #include <filesystem>
+#include <functional>
+#include <mutex>
 #include <thread>
 #include <unordered_map>
 
@@ -26,6 +31,7 @@ namespace Chess::Backend
       std::string public_origin;
       std::filesystem::path session_file;
       std::filesystem::path database_file;
+      std::filesystem::path revocation_database_file;
       int port = 8080;
   };
 
@@ -39,6 +45,9 @@ namespace Chess::Backend
       std::size_t peer_requests = 240;
       std::size_t principal_requests = 120;
       std::chrono::seconds window{60};
+      std::size_t create_requests = 10;
+      std::size_t join_requests = 20;
+      std::size_t mutation_requests = 60;
   };
 
   class ServiceRateLimiter
@@ -48,6 +57,7 @@ namespace Chess::Backend
       explicit ServiceRateLimiter(RateLimitConfig config = {}, Clock clock = std::chrono::steady_clock::now);
       bool allow_peer(const std::string& peer);
       bool allow_principal(const Principal& principal);
+      bool allow_operation(const Principal& principal, std::string_view method, std::string_view path);
       std::pair<std::size_t, std::size_t> state_size() const;
       std::chrono::seconds retry_after() const;
 
@@ -65,10 +75,51 @@ namespace Chess::Backend
       mutable std::mutex mutex_;
       Buckets peers_;
       Buckets principals_;
+      std::array<Buckets, 3> operations_;
+  };
+
+  enum class RuntimeMethod { Other, Get, Head, Post, Put, Patch, Delete, Options };
+  enum class RuntimeRoute { Other, Games, Session, Health };
+
+  struct RuntimeEvent
+  {
+      std::uint64_t request_id = 0;
+      RuntimeMethod method = RuntimeMethod::Other;
+      RuntimeRoute route = RuntimeRoute::Other;
+      int status = 0;
+      double duration_ms = 0;
+  };
+
+  struct RuntimeMetrics
+  {
+      std::uint64_t total = 0;
+      std::array<std::uint64_t, 6> by_status{};
+      double total_duration_ms = 0;
+  };
+
+  class RuntimeObserver
+  {
+    public:
+      using Sink = std::function<void(std::string)>;
+      explicit RuntimeObserver(Sink sink = {});
+      void record(const RuntimeEvent& event) noexcept;
+      RuntimeMetrics snapshot() const;
+
+    private:
+      Sink sink_;
+      mutable std::mutex metrics_mutex_;
+      std::mutex sink_mutex_;
+      RuntimeMetrics metrics_;
+  };
+
+  struct RuntimeOptions
+  {
+      std::chrono::milliseconds execution_timeout{2000};
   };
 
   void configure_service_runtime(httplib::Server& server, const SessionAuthenticator& authenticator,
-                                 ServiceRateLimiter& limiter);
+                                 ServiceRateLimiter& limiter, RuntimeObserver* observer = nullptr,
+                                 RuntimeOptions options = {});
 
   class ShutdownMonitor
   {

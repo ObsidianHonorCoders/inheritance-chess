@@ -4,6 +4,7 @@
 #include "request_authenticator.h"
 #include <chrono>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string_view>
@@ -11,6 +12,8 @@
 
 namespace Chess::Backend
 {
+  class ISessionRevocationStore;
+
   struct SessionAuthConfig
   {
       std::string public_origin;
@@ -34,7 +37,8 @@ namespace Chess::Backend
 
       explicit SessionAuthenticator(SessionAuthConfig config,
           WallClock wall_clock = std::chrono::system_clock::now,
-          MonotonicClock monotonic_clock = std::chrono::steady_clock::now);
+          MonotonicClock monotonic_clock = std::chrono::steady_clock::now,
+          std::shared_ptr<ISessionRevocationStore> store = {});
 
       std::optional<SessionCredentials> create_session(const Principal& principal);
       bool import_session(const Principal& principal, const std::string& token, std::int64_t expires);
@@ -59,9 +63,11 @@ namespace Chess::Backend
 
       void prune_locked() const;
       const Session* find_locked(std::string_view token) const;
+      bool revoked(std::string_view token) const;
       SessionAuthConfig config_;
       WallClock wall_clock_;
       MonotonicClock monotonic_clock_;
+      std::shared_ptr<ISessionRevocationStore> store_;
       mutable std::mutex mutex_;
       mutable std::vector<Session> sessions_;
   };

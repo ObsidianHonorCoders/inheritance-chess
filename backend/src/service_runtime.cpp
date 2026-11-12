@@ -1,7 +1,10 @@
 #include "service_runtime.h"
+#include "execution_budget.h"
 #include <nlohmann/json.hpp>
+#include <algorithm>
 #include <array>
 #include <charconv>
+#include <memory>
 #include <set>
 #include <stdexcept>
 #ifdef _WIN32
@@ -26,6 +29,75 @@ namespace Chess::Backend
     }
 
     constexpr std::size_t max_file_bytes = 64 * 1024;
+
+    struct RequestScope
+    {
+        std::unique_ptr<ExecutionBudget> budget;
+        std::chrono::steady_clock::time_point start;
+        std::uint64_t id = 0;
+        bool active = false;
+    };
+
+    thread_local RequestScope request_scope;
+    std::atomic<std::uint64_t> next_request_id{1};
+
+    std::string correlation_id(std::uint64_t value)
+    {
+      std::array<char, 16> buffer{};
+      buffer.fill('0');
+      std::array<char, 16> digits{};
+      const auto result = std::to_chars(digits.data(), digits.data() + digits.size(), value, 16);
+      const auto length = static_cast<std::size_t>(result.ptr - digits.data());
+      std::copy_n(digits.data(), length, buffer.data() + buffer.size() - length);
+      return std::string(buffer.data(), buffer.size());
+    }
+
+    RuntimeMethod normalized_method(const std::string& method)
+    {
+      if (method == "GET") return RuntimeMethod::Get;
+      if (method == "HEAD") return RuntimeMethod::Head;
+      if (method == "POST") return RuntimeMethod::Post;
+      if (method == "PUT") return RuntimeMethod::Put;
+      if (method == "PATCH") return RuntimeMethod::Patch;
+      if (method == "DELETE") return RuntimeMethod::Delete;
+      if (method == "OPTIONS") return RuntimeMethod::Options;
+      return RuntimeMethod::Other;
+    }
+
+    RuntimeRoute normalized_route(const std::string& path)
+    {
+      if (path == "/api/v1/games" || path.compare(0, 14, "/api/v1/games/") == 0)
+        return RuntimeRoute::Games;
+      if (path == "/api/v1/session") return RuntimeRoute::Session;
+      if (path == "/api/v1/health/live" || path == "/api/v1/health/ready") return RuntimeRoute::Health;
+      return RuntimeRoute::Other;
+    }
+
+    const char* method_name(RuntimeMethod method)
+    {
+      switch (method)
+      {
+        case RuntimeMethod::Get: return "GET";
+        case RuntimeMethod::Head: return "HEAD";
+        case RuntimeMethod::Post: return "POST";
+        case RuntimeMethod::Put: return "PUT";
+        case RuntimeMethod::Patch: return "PATCH";
+        case RuntimeMethod::Delete: return "DELETE";
+        case RuntimeMethod::Options: return "OPTIONS";
+        default: return "OTHER";
+      }
+    }
+
+    const char* route_name(RuntimeRoute route)
+    {
+      switch (route)
+      {
+        case RuntimeRoute::Games: return "games";
+        case RuntimeRoute::Session: return "session";
+        case RuntimeRoute::Health: return "health";
+        default: return "other";
+      }
+    }
 
 #ifdef _WIN32
     struct FileHandle
@@ -206,14 +278,24 @@ namespace Chess::Backend
     namespace fs = std::filesystem;
     if (!SessionAuthenticator::valid_public_origin(config.public_origin) || config.port < 1 || config.port > 65535
         || !config.session_file.is_absolute() || !config.database_file.is_absolute()
-        || config.session_file.filename().empty() || config.database_file.filename().empty()
-        || config.database_file == config.session_file) invalid_configuration();
+      || !config.revocation_database_file.is_absolute() || config.session_file.filename().empty()
+      || config.database_file.filename().empty() || config.revocation_database_file.filename().empty()
+      || config.database_file.lexically_normal() == config.session_file.lexically_normal()
+      || config.database_file.lexically_normal() == config.revocation_database_file.lexically_normal()
+      || config.session_file.lexically_normal() == config.revocation_database_file.lexically_normal()
+      || config.database_file.parent_path().lexically_normal()
+        != config.revocation_database_file.parent_path().lexically_normal()) invalid_configuration();
     const auto database = config.database_file.lexically_normal();
+    const auto revocations = config.revocation_database_file.lexically_normal();
     if (database.filename() == "." || database.filename() == ".."
-        || database.string().find(':', 2) != std::string::npos) invalid_configuration();
+      || revocations.filename() == "." || revocations.filename() == ".."
+      || database.string().find(':', 2) != std::string::npos
+      || revocations.string().find(':', 2) != std::string::npos) invalid_configuration();
 #ifdef _WIN32
     if (database.native().find_first_of(L"?*\"<>|") != std::wstring::npos
+      || revocations.native().find_first_of(L"?*\"<>|") != std::wstring::npos
         || database.native().compare(0, 2, L"\\\\") == 0
+      || revocations.native().compare(0, 2, L"\\\\") == 0
         || GetDriveTypeW(database.root_path().c_str()) != DRIVE_FIXED) invalid_configuration();
 #endif
     fs::path current;
@@ -230,10 +312,27 @@ namespace Chess::Backend
 #endif
       }
     }
+    current.clear();
+    for (const auto& part : revocations)
+    {
+      current /= part;
+      if (fs::exists(current))
+      {
+        if (fs::is_symlink(fs::symlink_status(current))) invalid_configuration();
+#ifdef _WIN32
+        const auto attributes = GetFileAttributesW(current.c_str());
+        if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+          invalid_configuration();
+#endif
+      }
+    }
     if (!fs::is_directory(database.parent_path())
-        || (fs::exists(database) && !fs::is_regular_file(database))) invalid_configuration();
+        || (fs::exists(database) && !fs::is_regular_file(database))
+        || (fs::exists(revocations) && !fs::is_regular_file(revocations))) invalid_configuration();
     if (fs::exists(database) && fs::exists(config.session_file) && fs::equivalent(database, config.session_file))
       invalid_configuration();
+    if (fs::exists(revocations) && fs::exists(config.session_file)
+      && fs::equivalent(revocations, config.session_file)) invalid_configuration();
 #ifdef __linux__
     struct statfs info{};
   if (statfs(database.parent_path().c_str(), &info) != 0
@@ -249,6 +348,9 @@ namespace Chess::Backend
     if (config_.max_peers == 0 || config_.max_peers > 65536 || config_.max_principals == 0
         || config_.max_principals > 65536 || config_.peer_requests == 0 || config_.peer_requests > 1000000
         || config_.principal_requests == 0 || config_.principal_requests > 1000000
+        || config_.create_requests == 0 || config_.create_requests > 1000000
+        || config_.join_requests == 0 || config_.join_requests > 1000000
+        || config_.mutation_requests == 0 || config_.mutation_requests > 1000000
         || config_.window.count() < 1 || config_.window > std::chrono::hours(1) || !clock_)
       invalid_configuration();
   }
@@ -291,6 +393,20 @@ namespace Chess::Backend
     return allow(principals_, principal.id, config_.max_principals, config_.principal_requests);
   }
 
+  bool ServiceRateLimiter::allow_operation(const Principal& principal, std::string_view method, std::string_view path)
+  {
+    if (!SessionAuthenticator::valid_principal(principal.id)) return false;
+    if (method != "POST") return true;
+    constexpr std::string_view games = "/api/v1/games";
+    if (path == games)
+      return allow(operations_[0], principal.id, config_.max_principals, config_.create_requests);
+    if (path.size() <= games.size() || path.substr(0, games.size() + 1) != "/api/v1/games/") return true;
+    const auto suffix = path.substr(games.size() + 1);
+    if (suffix.find('/') == std::string_view::npos)
+      return allow(operations_[1], principal.id, config_.max_principals, config_.join_requests);
+    return allow(operations_[2], principal.id, config_.max_principals, config_.mutation_requests);
+  }
+
   std::pair<std::size_t, std::size_t> ServiceRateLimiter::state_size() const
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -299,17 +415,58 @@ namespace Chess::Backend
 
   std::chrono::seconds ServiceRateLimiter::retry_after() const { return config_.window; }
 
-  void configure_service_runtime(httplib::Server& server, const SessionAuthenticator& authenticator,
-                                 ServiceRateLimiter& limiter)
+  RuntimeObserver::RuntimeObserver(Sink sink) : sink_(std::move(sink)) {}
+
+  void RuntimeObserver::record(const RuntimeEvent& event) noexcept
   {
+    try
+    {
+      {
+        std::lock_guard<std::mutex> lock(metrics_mutex_);
+        ++metrics_.total;
+        const auto bucket = event.status >= 100 && event.status < 600 ? event.status / 100 : 0;
+        ++metrics_.by_status[static_cast<std::size_t>(bucket)];
+        metrics_.total_duration_ms += event.duration_ms;
+      }
+      if (sink_)
+      {
+        const auto text = nlohmann::json{{"requestId", correlation_id(event.request_id)},
+          {"method", method_name(event.method)}, {"route", route_name(event.route)},
+          {"status", event.status}, {"durationMs", event.duration_ms}}.dump();
+        std::lock_guard<std::mutex> lock(sink_mutex_);
+        sink_(text);
+      }
+    }
+    catch (...) {}
+  }
+
+  RuntimeMetrics RuntimeObserver::snapshot() const
+  {
+    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    return metrics_;
+  }
+
+  void configure_service_runtime(httplib::Server& server, const SessionAuthenticator& authenticator,
+                                 ServiceRateLimiter& limiter, RuntimeObserver* observer, RuntimeOptions options)
+  {
+    if (options.execution_timeout < std::chrono::milliseconds(1)
+        || options.execution_timeout > std::chrono::milliseconds(60000)) invalid_configuration();
     server.new_task_queue = [] { return new httplib::ThreadPool(4, 64); };
     server.set_keep_alive_max_count(16);
     server.set_keep_alive_timeout(2);
     server.set_read_timeout(5);
     server.set_write_timeout(10);
     server.set_payload_max_length(16 * 1024);
-    server.set_pre_routing_handler([&authenticator, &limiter](const httplib::Request& request,
+    server.set_pre_routing_handler([&authenticator, &limiter, options](const httplib::Request& request,
                                                             httplib::Response& response) {
+      request_scope.budget.reset();
+      request_scope.active = false;
+      request_scope.start = std::chrono::steady_clock::now();
+      request_scope.id = next_request_id.fetch_add(1, std::memory_order_relaxed);
+      request_scope.budget = std::make_unique<ExecutionBudget>(options.execution_timeout);
+      request_scope.active = true;
+      response.headers.erase("X-Request-ID");
+      response.set_header("X-Request-ID", correlation_id(request_scope.id));
       if (!limiter.allow_peer(request.remote_addr))
       {
         rate_limited(response, limiter.retry_after());
@@ -318,13 +475,35 @@ namespace Chess::Backend
       if (request.path == "/api/v1" || request.path.compare(0, 8, "/api/v1/") == 0)
       {
         const auto principal = authenticator.principal_for(request);
-        if (principal && !limiter.allow_principal(*principal))
+        if (principal && (!limiter.allow_principal(*principal)
+              || !limiter.allow_operation(*principal, request.method, request.path)))
         {
           rate_limited(response, limiter.retry_after());
           return httplib::Server::HandlerResponse::Handled;
         }
       }
       return httplib::Server::HandlerResponse::Unhandled;
+    });
+    server.set_post_routing_handler([](const httplib::Request&, httplib::Response& response) {
+      if (!request_scope.active)
+      {
+        request_scope.start = std::chrono::steady_clock::now();
+        request_scope.id = next_request_id.fetch_add(1, std::memory_order_relaxed);
+        request_scope.active = true;
+      }
+      response.headers.erase("X-Request-ID");
+      response.set_header("X-Request-ID", correlation_id(request_scope.id));
+    });
+    server.set_logger([observer](const httplib::Request& request, const httplib::Response& response) {
+      const auto active = request_scope.active;
+      const auto id = active ? request_scope.id : next_request_id.fetch_add(1, std::memory_order_relaxed);
+      const auto duration = active ? std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - request_scope.start).count() : 0.0;
+      request_scope.budget.reset();
+      request_scope.active = false;
+      if (observer)
+        observer->record({id, normalized_method(request.method), normalized_route(request.path),
+                          response.status, duration});
     });
   }
 

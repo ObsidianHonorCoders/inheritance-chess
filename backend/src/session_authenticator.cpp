@@ -1,4 +1,5 @@
 #include "session_authenticator.h"
+#include "session_revocation_store.h"
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -158,9 +159,10 @@ namespace Chess::Backend
   }
 
   SessionAuthenticator::SessionAuthenticator(SessionAuthConfig config, WallClock wall_clock,
-                                             MonotonicClock monotonic_clock)
+                                             MonotonicClock monotonic_clock,
+                                             std::shared_ptr<ISessionRevocationStore> store)
       : config_(std::move(config)), wall_clock_(std::move(wall_clock)),
-        monotonic_clock_(std::move(monotonic_clock))
+        monotonic_clock_(std::move(monotonic_clock)), store_(std::move(store))
   {
     if (!valid_public_origin(config_.public_origin) || config_.max_sessions == 0
         || config_.max_sessions > 4096 || config_.lifetime.count() <= 0
@@ -195,7 +197,7 @@ namespace Chess::Backend
     prune_locked();
     if (sessions_.size() >= config_.max_sessions) return std::nullopt;
     auto token = random_token();
-    if (find_locked(token) != nullptr) return std::nullopt;
+    if (find_locked(token) != nullptr || revoked(token)) return std::nullopt;
     auto csrf = random_token();
     const auto expires = epoch(wall_clock_()) + config_.lifetime.count();
     sessions_.push_back(Session{principal, token, csrf, expires, monotonic_clock_() + config_.lifetime});
@@ -211,7 +213,7 @@ namespace Chess::Backend
     prune_locked();
     const auto now = epoch(wall_clock_());
     if (expires <= now || expires > now + 86400 || sessions_.size() >= config_.max_sessions
-        || find_locked(token) != nullptr) return false;
+      || find_locked(token) != nullptr || revoked(token)) return false;
     sessions_.push_back(Session{principal, token, random_token(), expires,
                                 monotonic_clock_() + std::chrono::seconds(expires - now)});
     return true;
@@ -219,13 +221,39 @@ namespace Chess::Backend
 
   bool SessionAuthenticator::revoke_session(const std::string& token)
   {
+    if (!valid_token(token)) return false;
     std::lock_guard<std::mutex> lock(mutex_);
     prune_locked();
-    const auto old_size = sessions_.size();
+    const auto* found = find_locked(token);
+    if (found == nullptr) return false;
+    if (store_)
+    {
+      try
+      {
+        store_->revoke(token, found->expires);
+      }
+      catch (...)
+      {
+        return false;
+      }
+    }
     sessions_.erase(std::remove_if(sessions_.begin(), sessions_.end(), [&](const Session& session) {
       return constant_time_equal(session.token, token);
     }), sessions_.end());
-    return old_size != sessions_.size();
+    return true;
+  }
+
+  bool SessionAuthenticator::revoked(std::string_view token) const
+  {
+    if (!store_) return false;
+    try
+    {
+      return store_->is_revoked(token, epoch(wall_clock_()));
+    }
+    catch (...)
+    {
+      return true;
+    }
   }
 
   std::size_t SessionAuthenticator::session_count() const
@@ -242,7 +270,7 @@ namespace Chess::Backend
     std::lock_guard<std::mutex> lock(mutex_);
     prune_locked();
     const auto* session = find_locked(*token);
-    if (session == nullptr) return std::nullopt;
+    if (session == nullptr || revoked(*token)) return std::nullopt;
     return session->principal;
   }
 
@@ -253,7 +281,7 @@ namespace Chess::Backend
     std::lock_guard<std::mutex> lock(mutex_);
     prune_locked();
     const auto* session = find_locked(*token);
-    if (session == nullptr) return {};
+    if (session == nullptr || revoked(*token)) return {};
     if (state_changing)
     {
       if (request.get_header_value_count("Origin") != 1

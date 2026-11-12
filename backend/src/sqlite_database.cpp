@@ -159,7 +159,10 @@ namespace Chess::Backend
     }
 
     sqlite3_extended_result_codes(database_, 1);
-    sqlite3_busy_timeout(database_, 5000);
+    if (sqlite3_busy_timeout(database_, 1000) != SQLITE_OK)
+    {
+      return;
+    }
 
     if (!execute(database_, "PRAGMA foreign_keys = ON")
         || !execute(database_, "PRAGMA journal_mode = WAL")

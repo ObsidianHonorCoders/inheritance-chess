@@ -142,10 +142,12 @@ namespace
   {
     protected:
       virtual HttpApiConfig configuration() const { return {}; }
+      virtual std::function<bool()> additional_readiness() const { return {}; }
 
       void SetUp() override
       {
-        Chess::Backend::register_http_api(server_, authenticator_, application_, configuration());
+        Chess::Backend::register_http_api(server_, authenticator_, application_, configuration(),
+                                          additional_readiness());
         port_ = server_.bind_to_any_port("127.0.0.1");
         ASSERT_GT(port_, 0);
         server_thread_ = std::thread([this] { server_.listen_after_bind(); });
@@ -202,6 +204,20 @@ namespace
     ASSERT_TRUE(response);
     EXPECT_EQ(response->status, 503);
     EXPECT_EQ(response->get_header_value("Content-Type").find("application/problem+json"), 0u);
+  }
+
+  class HttpApiAdditionalReadinessTest : public HttpApiTest
+  {
+    protected:
+      std::function<bool()> additional_readiness() const override { return [] { return false; }; }
+  };
+
+  TEST_F(HttpApiAdditionalReadinessTest, ReadinessRequiresEveryConfiguredDependency)
+  {
+    const auto response = client_->Get("/api/v1/health/ready");
+    ASSERT_TRUE(response);
+    EXPECT_EQ(response->status, 503);
+    EXPECT_EQ(Json::parse(response->body)["code"], "not_ready");
   }
 
   TEST_F(HttpApiTest, GameRoutesRequireAuthentication)

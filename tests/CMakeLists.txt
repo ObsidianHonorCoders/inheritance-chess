@@ -73,7 +73,10 @@ if(ICHESS_BUILD_BACKEND)
         ../backend/tests/test_sqlite_game_operations.cpp
         ../backend/tests/test_http_validation.cpp
         ../backend/tests/test_session_authenticator.cpp
+        ../backend/tests/test_session_revocation_store.cpp
         ../backend/tests/test_service_runtime.cpp
+        ../backend/tests/test_execution_budget.cpp
+        ../backend/tests/test_observability.cpp
     )
     set(BACKEND_TEST_LIBS ichess_backend)
 endif()
