@@ -282,6 +282,22 @@ namespace
     EXPECT_EQ(game.version, 5u);
   }
 
+  TEST_F(SqliteGameOperationsTest, ScheduledCleanupDeletesExpiredRetriesInBoundedBatches)
+  {
+    execute("INSERT INTO idempotency_records(principal_id,operation,idempotency_key,request_fingerprint,"
+            "response_json,created_at) VALUES "
+            "('alice','op:1','expired-key-00000001','fingerprint','{}','2000-01-01T00:00:00Z'),"
+            "('alice','op:2','expired-key-00000002','fingerprint','{}','2000-01-01T00:00:00Z'),"
+            "('alice','op:3','expired-key-00000003','fingerprint','{}','2000-01-01T00:00:00Z')");
+    ASSERT_EQ(integer("SELECT count(*) FROM idempotency_records"), 3);
+    EXPECT_TRUE(application_->cleanup_expired_idempotency(2));
+    EXPECT_EQ(integer("SELECT count(*) FROM idempotency_records"), 1);
+    EXPECT_TRUE(application_->cleanup_expired_idempotency(2));
+    EXPECT_EQ(integer("SELECT count(*) FROM idempotency_records"), 0);
+    EXPECT_FALSE(application_->cleanup_expired_idempotency(0));
+    EXPECT_FALSE(application_->cleanup_expired_idempotency(1025));
+  }
+
   TEST_F(SqliteGameOperationsTest, ResignationIsDurableTerminalAndRetryable)
   {
     const auto game = joined();

@@ -758,6 +758,39 @@ namespace Chess::Backend
     return database_.is_ready();
   }
 
+  bool SqliteGameApplication::cleanup_expired_idempotency(std::size_t maximum_records) noexcept
+  {
+    try
+    {
+      if (maximum_records == 0 || maximum_records > 1024 || !database_.is_ready())
+      {
+        return false;
+      }
+      std::lock_guard<std::mutex> lock(database_.mutex());
+      sqlite3* database = database_.handle();
+      Transaction transaction(database);
+      if (!transaction)
+      {
+        return false;
+      }
+      Statement cleanup(database, "DELETE FROM idempotency_records WHERE rowid IN "
+                                  "(SELECT rowid FROM idempotency_records WHERE created_at <= "
+                                  "strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours') "
+                                  "ORDER BY created_at LIMIT ?1)");
+      if (!cleanup || sqlite3_bind_int64(cleanup.get(), 1, static_cast<sqlite3_int64>(maximum_records)) != SQLITE_OK
+          || sqlite3_step(cleanup.get()) != SQLITE_DONE)
+      {
+        return false;
+      }
+      ExecutionBudget::checkpoint();
+      return transaction.commit();
+    }
+    catch (...)
+    {
+      return false;
+    }
+  }
+
   Result<GameSnapshot> SqliteGameApplication::create_game(const Principal& principal, const CreateGameCommand& command,
                                                            const std::string& idempotency_key)
   {

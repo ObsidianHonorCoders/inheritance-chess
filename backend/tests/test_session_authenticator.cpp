@@ -1,6 +1,9 @@
 #include "session_authenticator.h"
+#include "session_revocation_store.h"
 #include <gtest/gtest.h>
 #include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include <thread>
 
 namespace
@@ -160,5 +163,67 @@ namespace
     for (auto& thread : threads) thread.join();
     EXPECT_EQ(created.load(), 8);
     EXPECT_EQ(auth.session_count(), 8U);
+  }
+
+  class ConcurrentRevocationProbe final : public ISessionRevocationStore
+  {
+    public:
+      bool is_revoked(std::string_view, std::int64_t) override
+      {
+        std::unique_lock<std::mutex> lock(mutex_);
+        if (!blocking_) return false;
+        ++active_;
+        ++calls_;
+        maximum_active_ = (std::max)(maximum_active_, active_);
+        changed_.notify_all();
+        changed_.wait_for(lock, std::chrono::milliseconds(200), [&] { return calls_ >= 2; });
+        --active_;
+        changed_.notify_all();
+        return false;
+      }
+
+      void revoke(std::string_view, std::int64_t) override {}
+
+      void enable_blocking()
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        calls_ = 0;
+        maximum_active_ = 0;
+        blocking_ = true;
+      }
+      int maximum_active() const
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return maximum_active_;
+      }
+
+    private:
+      mutable std::mutex mutex_;
+      std::condition_variable changed_;
+      int active_ = 0;
+      int calls_ = 0;
+      int maximum_active_ = 0;
+      bool blocking_ = false;
+  };
+
+  TEST(SessionConcurrencyTest, DurableRevocationReadsDoNotSerializeAuthenticatorSessions)
+  {
+    auto store = std::make_shared<ConcurrentRevocationProbe>();
+    SessionAuthenticator auth({"https://chess.test"}, std::chrono::system_clock::now,
+                              std::chrono::steady_clock::now, store);
+    const auto first = auth.create_session(Principal{"alice"});
+    const auto second = auth.create_session(Principal{"bob"});
+    ASSERT_TRUE(first);
+    ASSERT_TRUE(second);
+    store->enable_blocking();
+    httplib::Request first_request;
+    first_request.set_header("Cookie", "__Host-ichess_session=" + first->token);
+    httplib::Request second_request;
+    second_request.set_header("Cookie", "__Host-ichess_session=" + second->token);
+    std::thread first_thread([&] { EXPECT_TRUE(auth.authenticate(first_request, false).authenticated); });
+    std::thread second_thread([&] { EXPECT_TRUE(auth.authenticate(second_request, false).authenticated); });
+    first_thread.join();
+    second_thread.join();
+    EXPECT_EQ(store->maximum_active(), 2);
   }
 }

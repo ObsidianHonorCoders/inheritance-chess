@@ -267,29 +267,38 @@ namespace Chess::Backend
   {
     const auto token = cookie_token(request);
     if (!token) return std::nullopt;
-    std::lock_guard<std::mutex> lock(mutex_);
-    prune_locked();
-    const auto* session = find_locked(*token);
-    if (session == nullptr || revoked(*token)) return std::nullopt;
-    return session->principal;
+    std::optional<Principal> principal;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      prune_locked();
+      const auto* session = find_locked(*token);
+      if (session == nullptr) return std::nullopt;
+      principal = session->principal;
+    }
+    return revoked(*token) ? std::nullopt : principal;
   }
 
   AuthenticationResult SessionAuthenticator::authenticate(const httplib::Request& request, bool state_changing) const
   {
     const auto token = cookie_token(request);
     if (!token) return {};
-    std::lock_guard<std::mutex> lock(mutex_);
-    prune_locked();
-    const auto* session = find_locked(*token);
-    if (session == nullptr || revoked(*token)) return {};
+    AuthenticationResult result;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      prune_locked();
+      const auto* session = find_locked(*token);
+      if (session == nullptr) return {};
+      result = AuthenticationResult{true, 401, session->principal, session->csrf_token};
+    }
+    if (revoked(*token)) return {};
     if (state_changing)
     {
       if (request.get_header_value_count("Origin") != 1
           || request.get_header_value("Origin") != config_.public_origin
           || request.get_header_value_count("X-CSRF-Token") != 1
-          || !constant_time_equal(request.get_header_value("X-CSRF-Token"), session->csrf_token))
+          || !constant_time_equal(request.get_header_value("X-CSRF-Token"), result.csrf_token))
         return AuthenticationResult{false, 403, {}, {}};
     }
-    return AuthenticationResult{true, 401, session->principal, session->csrf_token};
+    return result;
   }
 }

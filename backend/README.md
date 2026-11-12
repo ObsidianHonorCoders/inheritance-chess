@@ -18,7 +18,7 @@
 `SqliteGameApplication` implements all untimed game operations: create, snapshot, join, legal moves, paginated history, move submission, resignation, and draw offer/acceptance:
 
 - Mutations are atomic with their idempotency records. A retry scoped to the same principal and operation/resource returns the stored original snapshot before checking the fresh version precondition. A different payload/version under the same key returns `409`.
-- Idempotency results remain eligible for replay for 24 hours. An expired key may create a new game. Successful create transactions clean up at most 64 expired records, plus the expired record matching the current key. This bounds per-request cleanup work, not total storage; scheduled maintenance is still required for inactive deployments.
+- Idempotency results remain eligible for replay for 24 hours. An expired key may create a new game. Requests clean up bounded batches, and the service runs a 60-second maintenance pass deleting at most 256 expired records each time. This bounds cleanup work per pass while draining retained rows during inactive periods.
 - Retries recheck current game visibility before replay. Unknown and non-visible games both return `404`. Storage failures return redacted errors rather than being presented as missing games.
 - Public IDs use 128 bits from the OS random source: BCrypt on Windows and `/dev/urandom` on Unix-like systems. IDs are not credentials.
 - Handlers are reconstructed from initial FEN and contiguous ordered moves, retaining repetition history. A read transaction keeps metadata and moves consistent. Wrappers sharing a database synchronize on its connection mutex; independent connections serialize mutations through SQLite write transactions. Each mutation rechecks participant, seat, turn, status, and expected version. Competing writes cannot both commit at the same version.
@@ -30,7 +30,7 @@ Timed creation still returns `422` until restart-safe clock behavior is implemen
 
 `SessionAuthenticator` provides bounded in-memory, expiring sessions; random 256-bit opaque credentials and CSRF tokens; strict cookie parsing; exact HTTPS Origin checks; and secure cookie attributes for trusted session creation. Optional durable revocation stores only token digests in a separate SQLite database and is wired into the private-preview service. Imported preview credentials are bearer secrets, not verified OIDC identities. No route accepts a principal header as authentication.
 
-The service uses four workers and at most 64 queued connections, bounded keep-alive and socket timeouts, 16 KiB bodies, and bounded per-principal and socket-peer rate-limit state. Excess requests return `429` with `Retry-After`; a full connection queue closes excess connections. It ignores forwarded IP/identity headers. Behind one proxy, the socket-peer budget is shared by all users. A signal monitor stops the listener outside the signal handler and joins on shutdown. Request execution deadlines, detailed metrics, and load qualification remain release gates.
+The service uses four workers and at most 64 queued connections, bounded keep-alive and socket timeouts, 16 KiB bodies, bounded per-principal and socket-peer rate-limit state, and a cooperative two-second execution budget. Excess requests return `429` with `Retry-After`; a full connection queue closes excess connections. It ignores forwarded IP/identity headers. Behind one proxy, the socket-peer budget is shared by all users. A signal monitor stops the listener outside the signal handler and joins on shutdown. Redacted request correlation and aggregate metrics are emitted; blocking calls and representative load still need staging qualification. The service also schedules bounded idempotency cleanup every 60 seconds.
 
 The raw SQLite handle is exposed for storage integration and tests; callers must hold the database mutex for concurrent access and must not close the handle themselves. Normal consumers should use the application interface.
 
@@ -56,7 +56,7 @@ cmake --build --preset dev-build --target ichess_service
 ctest --preset dev-test -R HttpApi --output-on-failure
 ```
 
-Tests cover HTTP validation, malformed schemas, live readiness, concurrent versioned writes, retry authorization/expiry/rollback, restart repetition, promotion/checkmate, sessions, protected credential files, queue limits, and rate-limit concurrency. A real HTTP workflow combines session auth with SQLite gameplay and revocation. Run all tests with `ctest --preset dev-test --output-on-failure`. Linux execution, OIDC verification, external ingress isolation, backup restore, and load qualification still require deployment testing. See [ROADMAP.md](ROADMAP.md).
+Tests cover HTTP validation, malformed schemas, game and revocation readiness, concurrent versioned writes, bounded retention cleanup, retry authorization/expiry/rollback, restart repetition, promotion/checkmate, sessions, protected credential files, queue limits, and rate-limit concurrency. A real HTTP workflow combines session auth with SQLite gameplay and revocation. Run all tests with `ctest --preset dev-test --output-on-failure`. Linux deployment policy, OIDC verification, external ingress isolation, backup restore, and load qualification still require deployment testing. See [ROADMAP.md](ROADMAP.md).
 
 ## Dependencies
 

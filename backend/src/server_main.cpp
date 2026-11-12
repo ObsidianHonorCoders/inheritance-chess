@@ -3,9 +3,12 @@
 #include "service_runtime.h"
 #include "sqlite_game_application.h"
 #include <cstdlib>
+#include <atomic>
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <thread>
 
 namespace
 {
@@ -65,6 +68,35 @@ namespace
       Handler previous_interrupt_ = SIG_DFL;
       Handler previous_terminate_ = SIG_DFL;
   };
+
+  class IdempotencyMaintenanceWorker
+  {
+    public:
+      explicit IdempotencyMaintenanceWorker(Chess::Backend::SqliteGameApplication& application)
+        : thread_([this, &application] {
+          while (!stop_.load(std::memory_order_acquire))
+          {
+            for (int second = 0; second < 60 && !stop_.load(std::memory_order_acquire); ++second)
+              std::this_thread::sleep_for(std::chrono::seconds(1));
+            if (!stop_.load(std::memory_order_acquire) && !application.cleanup_expired_idempotency())
+              std::clog << "{\"event\":\"idempotency_maintenance_failed\"}\n";
+          }
+        })
+      {}
+
+      ~IdempotencyMaintenanceWorker()
+      {
+        stop_.store(true, std::memory_order_release);
+        if (thread_.joinable()) thread_.join();
+      }
+
+      IdempotencyMaintenanceWorker(const IdempotencyMaintenanceWorker&) = delete;
+      IdempotencyMaintenanceWorker& operator=(const IdempotencyMaintenanceWorker&) = delete;
+
+    private:
+      std::atomic<bool> stop_{false};
+      std::thread thread_;
+  };
 }
 
 int main()
@@ -101,6 +133,7 @@ int main()
     if (!server.bind_to_port("127.0.0.1", config.port)) throw std::runtime_error("Listener initialization failed.");
     SignalHandlers signals;
     ShutdownMonitor monitor(server, shutdown_requested);
+    IdempotencyMaintenanceWorker maintenance(application);
     return server.listen_after_bind() ? EXIT_SUCCESS : EXIT_FAILURE;
   }
   catch (...)

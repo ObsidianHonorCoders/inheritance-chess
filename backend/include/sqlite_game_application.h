@@ -3,6 +3,7 @@
 
 #include "game_application.h"
 #include "sqlite_database.h"
+#include <cstddef>
 #include <mutex>
 
 namespace Chess::Backend
@@ -13,6 +14,7 @@ namespace Chess::Backend
       explicit SqliteGameApplication(SqliteDatabase& database);
 
       bool is_ready() const override;
+      bool cleanup_expired_idempotency(std::size_t maximum_records = 256) noexcept;
       Result<GameSnapshot> create_game(const Principal& principal, const CreateGameCommand& command,
                                        const std::string& idempotency_key) override;
       Result<GameSnapshot> get_game(const Principal& principal, const std::string& game_id) const override;

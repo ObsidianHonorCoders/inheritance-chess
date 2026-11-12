@@ -10,7 +10,7 @@ The behavioral and security requirements remain in [SERVICE_CONTRACT.md](../docs
 
 ## 1. Durable Game Application
 
-Implemented: pinned SQLite, full schema validation, synchronized connection ownership, all atomic idempotent untimed operations, participant authorization, 128-bit OS IDs, bounded history replay, restart repetition, lifecycle outcomes, and live readiness. Retry eligibility lasts 24 hours. Remaining: clock policy and persistence, scheduled retention cleanup, disk/write health monitoring, backup/restore drills, and performance qualification. Timed creation returns `422`.
+Implemented: pinned SQLite, full schema validation, synchronized connection ownership, all atomic idempotent untimed operations, participant authorization, 128-bit OS IDs, bounded history replay, restart repetition, lifecycle outcomes, scheduled bounded retry-record cleanup, and live readiness. Retry eligibility lasts 24 hours. Remaining: clock policy and persistence, disk/write health monitoring, backup/restore drills, and performance qualification. Timed creation returns `422`.
 
 - Implement `IGameApplication` with participant authorization on every operation, including idempotent replay. Return the same `404` for absent and non-visible games.
 - Start with SQLite on local durable storage and one API process unless multiple instances are already required. Use PostgreSQL for multiple writers or API instances. Use parameterized queries, migrations, foreign keys, uniqueness constraints, and bounded lock waits.
@@ -34,7 +34,7 @@ Acceptance: expired, revoked, forged, and missing sessions fail closed; cross-or
 
 ## 3. Bounded Service Runtime
 
-Implemented: loopback-only service, strict startup configuration, protected preview credentials, four workers/64 queued connections, keep-alive/socket/body limits, bounded global and per-operation rate state, cooperative execution budgets, redacted request correlation/aggregate metrics, storage readiness for both databases, and signal-monitor shutdown. Remaining: interruption of blocking operations, graceful-drain/load qualification, Linux deployment verification, and overload capacity measurements. CI builds/tests on Linux, Windows, and macOS. Socket-peer limits intentionally aggregate traffic through one proxy; forwarded IPs are not trusted.
+Implemented: loopback-only service, strict startup configuration, protected preview credentials, four workers/64 queued connections, keep-alive/socket/body limits, bounded global and per-operation rate state, cooperative execution budgets, redacted request correlation/aggregate metrics, storage readiness for both databases, scheduled bounded retry cleanup, and signal-monitor shutdown. A systemd hardening template is available. Remaining: interruption of blocking operations, graceful-drain/load qualification, Linux deployment verification, and overload capacity measurements. CI builds/tests on Linux, Windows, and macOS. Socket-peer limits intentionally aggregate traffic through one proxy; forwarded IPs are not trusted.
 
 - Add a service executable that supplies the concrete adapters, validates startup configuration, and binds only to loopback or a private container interface.
 - Bound worker count, queued requests, active connections, keep-alive behavior, database waits, and execution time. Return controlled overload errors rather than growing memory without limit.
