@@ -22,7 +22,8 @@ namespace Chess::Backend
 
     private:
       sqlite3* database_ = nullptr;
-      bool ready_ = false;
+      bool initialized_ = false;
+      int schema_cookie_ = 0;
       mutable std::mutex mutex_;
   };
 } // namespace Chess::Backend

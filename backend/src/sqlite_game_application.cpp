@@ -82,7 +82,8 @@ namespace Chess::Backend
     std::string column_text(sqlite3_stmt* statement, int column)
     {
       const auto* value = sqlite3_column_text(statement, column);
-      return value == nullptr ? std::string{} : reinterpret_cast<const char*>(value);
+      return value == nullptr ? std::string{}
+                              : std::string(reinterpret_cast<const char*>(value), sqlite3_column_bytes(statement, column));
     }
 
     ApplicationError error(int status, std::string code, std::string title, std::string detail,
@@ -193,6 +194,56 @@ namespace Chess::Backend
       return !board.is_king_in_check(grid, previous_side);
     }
 
+    bool consistent_fen(const std::string& fen, const Chess::Grid& grid)
+    {
+      std::istringstream fields(fen);
+      std::string placement, turn, rights, target;
+      int halfmove = 0;
+      if (!(fields >> placement >> turn >> rights >> target >> halfmove))
+      {
+        return false;
+      }
+      const auto has_piece = [&grid](int file, int rank, Chess::PieceType type, Chess::Color color)
+      {
+        const auto piece = grid.get_piece(Chess::Position(file, rank));
+        return piece && piece->type == type && piece->color == color;
+      };
+      for (const char right : rights)
+      {
+        if (right == '-')
+        {
+          continue;
+        }
+        const bool white = right == 'K' || right == 'Q';
+        const auto color = white ? Chess::Color::WHITE : Chess::Color::BLACK;
+        const int rank = white ? 0 : 7;
+        const int rook_file = right == 'K' || right == 'k' ? 7 : 0;
+        if (!has_piece(4, rank, Chess::PieceType::KING, color)
+            || !has_piece(rook_file, rank, Chess::PieceType::ROOK, color))
+        {
+          return false;
+        }
+      }
+      if (target != "-")
+      {
+        const bool white_turn = grid.current_turn == Chess::Color::WHITE;
+        if (target.size() != 2 || target[0] < 'a' || target[0] > 'h'
+            || target[1] != (white_turn ? '6' : '3') || halfmove != 0)
+        {
+          return false;
+        }
+        const int file = target[0] - 'a';
+        if (grid.is_occupied(Chess::Position(file, white_turn ? 5 : 2))
+            || grid.is_occupied(Chess::Position(file, white_turn ? 6 : 1))
+            || !has_piece(file, white_turn ? 4 : 3, Chess::PieceType::PAWN,
+                          white_turn ? Chess::Color::BLACK : Chess::Color::WHITE))
+        {
+          return false;
+        }
+      }
+      return true;
+    }
+
     std::string initial_status(const Chess::Grid& grid)
     {
       Chess::ChessBoardManager board;
@@ -213,7 +264,10 @@ namespace Chess::Backend
       return "ongoing";
     }
 
-    Result<GameSnapshot> load_snapshot(sqlite3* database, const Principal& principal, const std::string& game_id)
+    constexpr std::uint64_t maximum_plies = 4096;
+
+    Result<GameSnapshot> load_snapshot(sqlite3* database, const Principal& principal, const std::string& game_id,
+                       Chess::ChessGameHandler* restored = nullptr)
     {
       Statement game_query(database,
                            "SELECT white_principal, black_principal, initial_fen, version, status, updated_at "
@@ -241,21 +295,77 @@ namespace Chess::Backend
       }
 
       const std::string initial_fen = column_text(game_query.get(), 2);
+      if (sqlite3_column_type(game_query.get(), 3) != SQLITE_INTEGER
+          || sqlite3_column_int64(game_query.get(), 3) <= 0)
+      {
+        return internal_error();
+      }
       const std::uint64_t version = static_cast<std::uint64_t>(sqlite3_column_int64(game_query.get(), 3));
       const std::string persisted_status = column_text(game_query.get(), 4);
+      const std::array<std::string_view, 11> statuses{
+        "ongoing", "checkmate", "stalemate", "draw_insufficient_material", "draw_threefold_repetition",
+        "draw_fifty_move_rule", "white_resigned", "black_resigned", "draw_by_agreement", "white_timeout", "black_timeout"};
+      bool known_status = false;
+      for (const auto candidate : statuses)
+      {
+        known_status = known_status || candidate == persisted_status;
+      }
+      if (!known_status)
+      {
+        return internal_error();
+      }
+      if (sqlite3_step(game_query.get()) != SQLITE_DONE)
+      {
+        return internal_error();
+      }
+      if (initial_fen.empty() || initial_fen.size() > 128)
+      {
+        return internal_error();
+      }
 
-      Chess::ChessGameHandler handler;
+      Chess::ChessGameHandler local_handler;
+      auto& handler = restored ? *restored : local_handler;
       Chess::ChessTranslationUnit translator;
       try
       {
         handler.load_game_from_fen(initial_fen);
+        if (handler.get_current_fen() != initial_fen || !valid_initial_position(handler.get_current_grid())
+            || !consistent_fen(initial_fen, handler.get_current_grid()))
+        {
+          return internal_error();
+        }
       }
       catch (...)
       {
         return internal_error();
       }
 
-      Statement move_query(database, "SELECT uci, ply FROM game_moves WHERE game_id = ?1 ORDER BY ply");
+      Statement last_move(database, "SELECT ply FROM game_moves WHERE game_id = ?1 ORDER BY ply DESC LIMIT 1");
+      if (!last_move || !bind_text(last_move.get(), 1, game_id))
+      {
+        return internal_error();
+      }
+      const int last_step = sqlite3_step(last_move.get());
+      if (last_step == SQLITE_ROW)
+      {
+        if (sqlite3_column_type(last_move.get(), 0) != SQLITE_INTEGER)
+        {
+          return internal_error();
+        }
+        if (sqlite3_column_int64(last_move.get(), 0) > static_cast<sqlite3_int64>(maximum_plies))
+        {
+          return error(409, "history_limit", "Conflict", "The game exceeds the supported move history limit.");
+        }
+        if (sqlite3_step(last_move.get()) != SQLITE_DONE)
+        {
+          return internal_error();
+        }
+      }
+      else if (last_step != SQLITE_DONE)
+      {
+        return internal_error();
+      }
+      Statement move_query(database, "SELECT uci, ply FROM game_moves WHERE game_id = ?1 ORDER BY ply LIMIT 4097");
       if (!move_query || !bind_text(move_query.get(), 1, game_id))
       {
         return internal_error();
@@ -264,11 +374,21 @@ namespace Chess::Backend
       int move_step = SQLITE_OK;
       while ((move_step = sqlite3_step(move_query.get())) == SQLITE_ROW)
       {
-        if (sqlite3_column_int64(move_query.get(), 1) != static_cast<sqlite3_int64>(move_count + 1))
+        if (move_count >= maximum_plies)
+        {
+          return error(409, "history_limit", "Conflict", "The game exceeds the supported move history limit.");
+        }
+        if (sqlite3_column_type(move_query.get(), 1) != SQLITE_INTEGER
+            || sqlite3_column_int64(move_query.get(), 1) != static_cast<sqlite3_int64>(move_count + 1))
         {
           return internal_error();
         }
         const std::string uci = column_text(move_query.get(), 0);
+        if (handler.get_current_grid().flags.halfmove_clock >= (std::numeric_limits<int>::max)() - 1
+            || handler.get_current_grid().flags.fullmove_number >= (std::numeric_limits<int>::max)() - 1)
+        {
+          return error(409, "counter_limit", "Conflict", "The position counter limit has been reached.");
+        }
         bool applied = false;
         for (const auto& move : handler.get_legal_moves())
         {
@@ -360,10 +480,244 @@ namespace Chess::Backend
       return std::to_string(fen.size()) + ":" + fen;
     }
 
-    template <typename T>
-    Result<T> not_implemented()
+    enum class Operation { join, move, resign, offer_draw, accept_draw };
+
+    Result<GameSnapshot> mutate(SqliteDatabase& owner, const Principal& principal, const std::string& game_id,
+                                 std::uint64_t expected_version, const std::string& key, Operation operation,
+                                 const std::string& uci = {})
     {
-      return error(501, "operation_unavailable", "Not Implemented", "This game operation is not available yet.");
+      if (!owner.is_ready())
+      {
+        return storage_unavailable();
+      }
+      if (principal.id.empty() || principal.id.size() > 256 || game_id.empty() || game_id.size() > 256
+          || key.size() < 16 || key.size() > 128)
+      {
+        return error(400, "invalid_request", "Bad Request", "The request could not be completed.");
+      }
+      if (operation == Operation::move
+          && ((uci.size() != 4 && uci.size() != 5) || uci[0] < 'a' || uci[0] > 'h'
+              || uci[1] < '1' || uci[1] > '8' || uci[2] < 'a' || uci[2] > 'h'
+              || uci[3] < '1' || uci[3] > '8'
+              || (uci.size() == 5 && std::string_view("qrbn").find(uci[4]) == std::string_view::npos)))
+      {
+        return error(400, "invalid_move", "Bad Request", "The move must be lowercase UCI notation.");
+      }
+      std::lock_guard<std::mutex> lock(owner.mutex());
+      sqlite3* database = owner.handle();
+      Transaction transaction(database);
+      if (!transaction)
+      {
+        return internal_error();
+      }
+      Statement seats(database, "SELECT white_principal, black_principal, draw_offer_by, initial_ms "
+                                "FROM games WHERE game_id = ?1");
+      if (!seats || !bind_text(seats.get(), 1, game_id))
+      {
+        return internal_error();
+      }
+      const int seat_step = sqlite3_step(seats.get());
+      if (seat_step == SQLITE_DONE)
+      {
+        return error(404, "game_not_found", "Not Found", "The requested game was not found.");
+      }
+      if (seat_step != SQLITE_ROW)
+      {
+        return internal_error();
+      }
+      const std::string white = column_text(seats.get(), 0);
+      std::string black = column_text(seats.get(), 1);
+      std::string draw_offer = column_text(seats.get(), 2);
+      const bool timed = sqlite3_column_type(seats.get(), 3) != SQLITE_NULL;
+      if (sqlite3_step(seats.get()) != SQLITE_DONE)
+      {
+        return internal_error();
+      }
+      const bool participant = !principal.id.empty()
+                               && (principal.id == white || (!black.empty() && principal.id == black));
+      if (!participant && operation != Operation::join)
+      {
+        return error(404, "game_not_found", "Not Found", "The requested game was not found.");
+      }
+      if (timed)
+      {
+        return error(422, "time_control_unavailable", "Unprocessable Content", "Timed games are not supported.");
+      }
+      const std::array<const char*, 5> names{"join", "move", "resign", "offer_draw", "accept_draw"};
+      const std::string scope = std::string(names[static_cast<std::size_t>(operation)]) + ":" + game_id;
+      const std::string fingerprint = Json{{"version", expected_version}, {"uci", uci}}.dump();
+      Statement prior(database, "SELECT request_fingerprint, response_json FROM idempotency_records "
+                                "WHERE principal_id = ?1 AND operation = ?2 AND idempotency_key = ?3 "
+                                "AND created_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')");
+      if (!prior || !bind_text(prior.get(), 1, principal.id) || !bind_text(prior.get(), 2, scope)
+          || !bind_text(prior.get(), 3, key))
+      {
+        return internal_error();
+      }
+      const int prior_step = sqlite3_step(prior.get());
+      if (prior_step != SQLITE_ROW && prior_step != SQLITE_DONE)
+      {
+        return internal_error();
+      }
+      if (prior_step == SQLITE_ROW)
+      {
+        if (!participant)
+        {
+          return error(404, "game_not_found", "Not Found", "The requested game was not found.");
+        }
+        if (column_text(prior.get(), 0) != fingerprint)
+        {
+          return error(409, "idempotency_conflict", "Conflict", "The idempotency key was already used for a different request.");
+        }
+        try
+        {
+          auto snapshot = snapshot_from_json(Json::parse(column_text(prior.get(), 1)));
+          if (snapshot.game_id != game_id || sqlite3_step(prior.get()) != SQLITE_DONE || !transaction.commit())
+          {
+            return internal_error();
+          }
+          return snapshot;
+        }
+        catch (...)
+        {
+          return internal_error();
+        }
+      }
+      if (operation == Operation::join && (principal.id == white || !black.empty()))
+      {
+        return error(409, "seat_unavailable", "Conflict", "The Black seat cannot be claimed.");
+      }
+      Chess::ChessGameHandler handler;
+      auto loaded = load_snapshot(database, Principal{operation == Operation::join ? white : principal.id}, game_id, &handler);
+      if (const auto* failure = std::get_if<ApplicationError>(&loaded))
+      {
+        return *failure;
+      }
+      const auto& current = std::get<GameSnapshot>(loaded);
+      if (current.version != expected_version)
+      {
+        return error(412, "stale_version", "Precondition Failed", "The game version has changed.", current.version);
+      }
+      if (current.version >= static_cast<std::uint64_t>((std::numeric_limits<sqlite3_int64>::max)()))
+      {
+        return error(409, "version_limit", "Conflict", "The game version limit has been reached.", current.version);
+      }
+      if (current.status != "ongoing")
+      {
+        return error(409, "game_finished", "Conflict", "The game is already finished.");
+      }
+      std::string status = current.status;
+      const std::string seat = principal.id == white ? "white" : "black";
+      if (!draw_offer.empty() && draw_offer != "white" && draw_offer != "black")
+      {
+        return internal_error();
+      }
+      if (operation == Operation::join)
+      {
+        black = principal.id;
+      }
+      else if (operation == Operation::move)
+      {
+        if (black.empty() || current.side_to_move != seat)
+        {
+          return error(409, "wrong_turn", "Conflict", "The caller cannot move now.");
+        }
+        if (current.move_count >= maximum_plies)
+        {
+          return error(409, "history_limit", "Conflict", "The game exceeds the supported move history limit.");
+        }
+        if (handler.get_current_grid().flags.halfmove_clock >= (std::numeric_limits<int>::max)() - 1
+            || handler.get_current_grid().flags.fullmove_number >= (std::numeric_limits<int>::max)() - 1)
+        {
+          return error(409, "counter_limit", "Conflict", "The position counter limit has been reached.");
+        }
+        Chess::ChessTranslationUnit translator;
+        bool applied = false;
+        std::string san;
+        for (const auto& move : handler.get_legal_moves())
+        {
+          if (translator.move_to_algebraic(move, handler.get_current_grid()) == uci)
+          {
+            san = translator.move_to_san(move, handler.get_current_grid());
+            applied = handler.make_move(move);
+            break;
+          }
+        }
+        if (!applied)
+        {
+          return error(422, "illegal_move", "Unprocessable Content", "The move is not legal in this position.");
+        }
+        Statement append(database, "INSERT INTO game_moves(game_id, ply, uci, san) VALUES(?1, ?2, ?3, ?4)");
+        if (!append || !bind_text(append.get(), 1, game_id)
+            || sqlite3_bind_int64(append.get(), 2, static_cast<sqlite3_int64>(current.move_count + 1)) != SQLITE_OK
+            || !bind_text(append.get(), 3, uci) || !bind_text(append.get(), 4, san)
+            || sqlite3_step(append.get()) != SQLITE_DONE)
+        {
+          return internal_error();
+        }
+        status = status_name(handler.get_game_state());
+        draw_offer.clear();
+      }
+      else if (operation == Operation::resign)
+      {
+        status = seat + "_resigned";
+        draw_offer.clear();
+      }
+      else if (operation == Operation::offer_draw)
+      {
+        if (black.empty() || !draw_offer.empty())
+        {
+          return error(409, "draw_offer_unavailable", "Conflict", "A draw cannot be offered now.");
+        }
+        draw_offer = seat;
+      }
+      else
+      {
+        if (black.empty() || draw_offer.empty() || draw_offer == seat)
+        {
+          return error(409, "no_opponent_offer", "Conflict", "There is no opponent draw offer to accept.");
+        }
+        status = "draw_by_agreement";
+        draw_offer.clear();
+      }
+      Statement update(database, "UPDATE games SET black_principal = ?1, status = ?2, draw_offer_by = ?3, "
+                                 "version = version + 1, updated_at = ?4 WHERE game_id = ?5 AND version = ?6");
+      if (!update || (black.empty() ? sqlite3_bind_null(update.get(), 1) != SQLITE_OK : !bind_text(update.get(), 1, black))
+          || !bind_text(update.get(), 2, status)
+          || (draw_offer.empty() ? sqlite3_bind_null(update.get(), 3) != SQLITE_OK : !bind_text(update.get(), 3, draw_offer))
+          || !bind_text(update.get(), 4, utc_now()) || !bind_text(update.get(), 5, game_id)
+          || sqlite3_bind_int64(update.get(), 6, static_cast<sqlite3_int64>(expected_version)) != SQLITE_OK
+          || sqlite3_step(update.get()) != SQLITE_DONE || sqlite3_changes(database) != 1)
+      {
+        return internal_error();
+      }
+      auto result = load_snapshot(database, principal, game_id);
+      if (const auto* failure = std::get_if<ApplicationError>(&result))
+      {
+        return *failure;
+      }
+      Statement cleanup(database, "DELETE FROM idempotency_records WHERE rowid IN "
+                                  "(SELECT rowid FROM idempotency_records WHERE created_at <= "
+                                  "strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours') ORDER BY created_at LIMIT 64)");
+      Statement expired(database, "DELETE FROM idempotency_records WHERE principal_id = ?1 AND operation = ?2 "
+                                  "AND idempotency_key = ?3 AND created_at <= "
+                                  "strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')");
+      if (!cleanup || sqlite3_step(cleanup.get()) != SQLITE_DONE || !expired
+          || !bind_text(expired.get(), 1, principal.id) || !bind_text(expired.get(), 2, scope)
+          || !bind_text(expired.get(), 3, key) || sqlite3_step(expired.get()) != SQLITE_DONE)
+      {
+        return internal_error();
+      }
+      Statement record(database, "INSERT INTO idempotency_records(principal_id, operation, idempotency_key, "
+                                 "request_fingerprint, response_json, created_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6)");
+      if (!record || !bind_text(record.get(), 1, principal.id) || !bind_text(record.get(), 2, scope)
+          || !bind_text(record.get(), 3, key) || !bind_text(record.get(), 4, fingerprint)
+          || !bind_text(record.get(), 5, snapshot_json(std::get<GameSnapshot>(result)).dump())
+          || !bind_text(record.get(), 6, utc_now()) || sqlite3_step(record.get()) != SQLITE_DONE || !transaction.commit())
+      {
+        return internal_error();
+      }
+      return result;
     }
   } // namespace
 
@@ -399,7 +753,8 @@ namespace Chess::Backend
     try
     {
       handler.load_game_from_fen(fen);
-      if (handler.get_current_fen() != fen || !valid_initial_position(handler.get_current_grid()))
+        if (handler.get_current_fen() != fen || !valid_initial_position(handler.get_current_grid())
+          || !consistent_fen(fen, handler.get_current_grid()))
       {
         return error(422, "invalid_fen", "Unprocessable Content", "The initial position is invalid.");
       }
@@ -443,13 +798,19 @@ namespace Chess::Backend
     }
     if (prior_step == SQLITE_ROW)
     {
-      if (column_text(prior.get(), 0) != fingerprint)
+      const auto prior_fingerprint = column_text(prior.get(), 0);
+      const auto prior_response = column_text(prior.get(), 1);
+      if (sqlite3_step(prior.get()) != SQLITE_DONE)
+      {
+        return internal_error();
+      }
+      if (prior_fingerprint != fingerprint)
       {
         return error(409, "idempotency_conflict", "Conflict", "The idempotency key was already used for a different request.");
       }
       try
       {
-        GameSnapshot snapshot = snapshot_from_json(Json::parse(column_text(prior.get(), 1)));
+        GameSnapshot snapshot = snapshot_from_json(Json::parse(prior_response));
         const auto authorized = load_snapshot(database, principal, snapshot.game_id);
         if (std::holds_alternative<ApplicationError>(authorized))
         {
@@ -484,9 +845,10 @@ namespace Chess::Backend
     }
     Statement insert(database,
                      "INSERT INTO games(game_id, white_principal, initial_fen, version, status, created_at, updated_at) "
-                     "VALUES(?4, ?1, ?2, 1, 'ongoing', ?3, ?3) RETURNING game_id");
+                     "VALUES(?4, ?1, ?2, 1, ?5, ?3, ?3) RETURNING game_id");
     if (!insert || !bind_text(insert.get(), 1, principal.id) || !bind_text(insert.get(), 2, fen)
         || !bind_text(insert.get(), 3, utc_now()) || !bind_text(insert.get(), 4, *generated_id)
+        || !bind_text(insert.get(), 5, initial_status(handler.get_current_grid()))
         || sqlite3_step(insert.get()) != SQLITE_ROW)
     {
       return internal_error();
@@ -534,17 +896,93 @@ namespace Chess::Backend
     return result;
   }
 
-  Result<GameSnapshot> SqliteGameApplication::join_game(const Principal&, const std::string&, std::uint64_t,
-                                                         const std::string&) { return not_implemented<GameSnapshot>(); }
-  Result<LegalMoveList> SqliteGameApplication::get_legal_moves(const Principal&, const std::string&) const { return not_implemented<LegalMoveList>(); }
-  Result<MovePage> SqliteGameApplication::get_move_history(const Principal&, const std::string&, std::uint64_t,
-                                                           std::uint64_t) const { return not_implemented<MovePage>(); }
-  Result<GameSnapshot> SqliteGameApplication::submit_move(const Principal&, const std::string&, const MoveCommand&,
-                                                           const std::string&) { return not_implemented<GameSnapshot>(); }
-  Result<GameSnapshot> SqliteGameApplication::resign(const Principal&, const std::string&, std::uint64_t,
-                                                      const std::string&) { return not_implemented<GameSnapshot>(); }
-  Result<GameSnapshot> SqliteGameApplication::offer_draw(const Principal&, const std::string&, std::uint64_t,
-                                                          const std::string&) { return not_implemented<GameSnapshot>(); }
-  Result<GameSnapshot> SqliteGameApplication::accept_draw(const Principal&, const std::string&, std::uint64_t,
-                                                           const std::string&) { return not_implemented<GameSnapshot>(); }
+  Result<GameSnapshot> SqliteGameApplication::join_game(const Principal& principal, const std::string& game_id,
+                                                        std::uint64_t version, const std::string& key)
+  {
+    return mutate(database_, principal, game_id, version, key, Operation::join);
+  }
+
+  Result<LegalMoveList> SqliteGameApplication::get_legal_moves(const Principal& principal, const std::string& game_id) const
+  {
+    auto result = get_game(principal, game_id);
+    if (const auto* failure = std::get_if<ApplicationError>(&result))
+    {
+      return *failure;
+    }
+    auto& snapshot = std::get<GameSnapshot>(result);
+    return LegalMoveList{snapshot.version, std::move(snapshot.legal_moves)};
+  }
+
+  Result<MovePage> SqliteGameApplication::get_move_history(const Principal& principal, const std::string& game_id,
+                                                          std::uint64_t after_ply, std::uint64_t limit) const
+  {
+    if (!database_.is_ready())
+    {
+      return storage_unavailable();
+    }
+    if (limit == 0 || limit > 200 || after_ply > maximum_plies)
+    {
+      return error(400, "invalid_pagination", "Bad Request", "The history cursor or page size is invalid.");
+    }
+    std::lock_guard<std::mutex> lock(database_.mutex());
+    sqlite3* database = database_.handle();
+    Transaction transaction(database, false);
+    if (!transaction)
+    {
+      return internal_error();
+    }
+    const auto authorized = load_snapshot(database, principal, game_id);
+    if (const auto* failure = std::get_if<ApplicationError>(&authorized))
+    {
+      return *failure;
+    }
+    Statement query(database, "SELECT ply, uci, san FROM game_moves WHERE game_id = ?1 AND ply > ?2 ORDER BY ply LIMIT ?3");
+    if (!query || !bind_text(query.get(), 1, game_id)
+        || sqlite3_bind_int64(query.get(), 2, static_cast<sqlite3_int64>(after_ply)) != SQLITE_OK
+        || sqlite3_bind_int64(query.get(), 3, static_cast<sqlite3_int64>(limit + 1)) != SQLITE_OK)
+    {
+      return internal_error();
+    }
+    MovePage page;
+    int step = SQLITE_OK;
+    while ((step = sqlite3_step(query.get())) == SQLITE_ROW)
+    {
+      if (page.moves.size() == limit)
+      {
+        page.next_after_ply = page.moves.back().ply;
+        continue;
+      }
+      page.moves.push_back(MoveRecord{static_cast<std::uint64_t>(sqlite3_column_int64(query.get(), 0)),
+                                      column_text(query.get(), 1), column_text(query.get(), 2)});
+    }
+    if (step != SQLITE_DONE || !transaction.commit())
+    {
+      return internal_error();
+    }
+    return page;
+  }
+
+  Result<GameSnapshot> SqliteGameApplication::submit_move(const Principal& principal, const std::string& game_id,
+                                                          const MoveCommand& command, const std::string& key)
+  {
+    return mutate(database_, principal, game_id, command.expected_version, key, Operation::move, command.uci);
+  }
+
+  Result<GameSnapshot> SqliteGameApplication::resign(const Principal& principal, const std::string& game_id,
+                                                    std::uint64_t version, const std::string& key)
+  {
+    return mutate(database_, principal, game_id, version, key, Operation::resign);
+  }
+
+  Result<GameSnapshot> SqliteGameApplication::offer_draw(const Principal& principal, const std::string& game_id,
+                                                        std::uint64_t version, const std::string& key)
+  {
+    return mutate(database_, principal, game_id, version, key, Operation::offer_draw);
+  }
+
+  Result<GameSnapshot> SqliteGameApplication::accept_draw(const Principal& principal, const std::string& game_id,
+                                                         std::uint64_t version, const std::string& key)
+  {
+    return mutate(database_, principal, game_id, version, key, Operation::accept_draw);
+  }
 } // namespace Chess::Backend

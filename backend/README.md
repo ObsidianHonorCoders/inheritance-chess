@@ -9,22 +9,28 @@
 - `IGameApplication` owns authorization, versioned/idempotent operations, and repository transactions. Its implementation must enforce game-seat ownership and persist initial FEN plus the ordered move log.
 - `api_types.h` contains transport-neutral API DTOs and safe application errors.
 
-The host application supplies concrete authentication and game-application implementations before starting a listener. This library does not include a development identity bypass or an in-memory production store. A partial SQLite implementation now supports durable untimed creation and participant-only snapshots, but it is not a complete game service. Until authentication and the remaining application operations exist, the service must not be exposed through Cloudflare Tunnel.
+`ichess_service` composes SQLite gameplay and concrete server-side session authentication for a restricted private preview. It binds only to `127.0.0.1`. There is no identity-header bypass, public session-minting route, or public account login flow. See [DEPLOYMENT.md](DEPLOYMENT.md) before configuring ingress. This is not a production-readiness certification.
 
 ## SQLite Application Foundation
 
-`SqliteDatabase` owns a full-mutex SQLite connection with foreign keys, defensive mode, untrusted schema, WAL, full synchronization, and a five-second busy timeout. Schema version 1 includes games, ordered moves, and idempotency records. Unsupported versions fail initialization and roll back schema changes. The database must outlive every `SqliteGameApplication` referencing it. Keep the database on local durable storage, not a network filesystem.
+`SqliteDatabase` owns a full-mutex SQLite connection with foreign keys, defensive mode, untrusted schema, WAL, full synchronization, and a five-second busy timeout. Schema version 1 includes games, ordered moves, and idempotency records. Startup validates table columns, keys, foreign keys, and constraint behavior; unsupported or malformed schemas fail closed without repair. Live readiness checks storage access, version, constraint enforcement, and schema changes. DDL changes require reopening for revalidation. The database must outlive every `SqliteGameApplication` referencing it. Keep the database on local durable storage, not a network filesystem.
 
-`SqliteGameApplication` currently implements `create_game` and `get_game`:
+`SqliteGameApplication` implements all untimed game operations: create, snapshot, join, legal moves, paginated history, move submission, resignation, and draw offer/acceptance:
 
-- Untimed creation is atomic with its idempotency record. A retry scoped to the same principal and operation returns the stored original snapshot; a different initial FEN under the same key returns `409`.
+- Mutations are atomic with their idempotency records. A retry scoped to the same principal and operation/resource returns the stored original snapshot before checking the fresh version precondition. A different payload/version under the same key returns `409`.
 - Idempotency results remain eligible for replay for 24 hours. An expired key may create a new game. Successful create transactions clean up at most 64 expired records, plus the expired record matching the current key. This bounds per-request cleanup work, not total storage; scheduled maintenance is still required for inactive deployments.
 - Retries recheck current game visibility before replay. Unknown and non-visible games both return `404`. Storage failures return redacted errors rather than being presented as missing games.
 - Public IDs use 128 bits from the OS random source: BCrypt on Windows and `/dev/urandom` on Unix-like systems. IDs are not credentials.
-- Handlers are reconstructed per read from initial FEN and contiguous ordered moves. A read transaction keeps the game metadata and move log in one consistent database snapshot. Wrappers sharing a database synchronize on its connection mutex; independent connections serialize creation through SQLite write transactions.
-- Initial FEN must round-trip through the core parser in canonical form and pass basic chess-position checks. These checks are not a proof of historical reachability. Initial terminal positions do not advertise playable moves.
+- Handlers are reconstructed from initial FEN and contiguous ordered moves, retaining repetition history. A read transaction keeps metadata and moves consistent. Wrappers sharing a database synchronize on its connection mutex; independent connections serialize mutations through SQLite write transactions. Each mutation rechecks participant, seat, turn, status, and expected version. Competing writes cannot both commit at the same version.
+- Initial FEN must round-trip in canonical form and pass king, pawn, counter, castling, and en-passant consistency checks. These checks are not a proof of historical reachability. Terminal positions do not advertise playable moves. History is capped at 4096 plies; longer games return a controlled conflict rather than unbounded replay work.
 
-Timed creation returns `422` until restart-safe clock behavior is implemented. Join, legal-move/history endpoints, move submission, resignation, and draw actions currently return `501` from this partial application. The readiness check reflects successful database initialization, not a continuous storage health probe. The host must not treat it as production readiness yet.
+Timed creation still returns `422` until restart-safe clock behavior is implemented. Do not present timed play in a client. Live readiness is a lightweight read/schema probe, not proof of available disk capacity, successful future writes, or end-to-end deployment health.
+
+## Private Preview Runtime
+
+`SessionAuthenticator` provides bounded in-memory, expiring, revocable sessions; random 256-bit opaque credentials and CSRF tokens; strict cookie parsing; exact HTTPS Origin checks; and secure cookie attributes for trusted session creation. Imported preview credentials are bearer secrets, not verified OIDC identities. No route accepts a principal header as authentication.
+
+The service uses four workers and at most 64 queued connections, bounded keep-alive and socket timeouts, 16 KiB bodies, and bounded per-principal and socket-peer rate-limit state. Excess requests return `429` with `Retry-After`; a full connection queue closes excess connections. It ignores forwarded IP/identity headers. Behind one proxy, the socket-peer budget is shared by all users. A signal monitor stops the listener outside the signal handler and joins on shutdown. Request execution deadlines, detailed metrics, and load qualification remain release gates.
 
 The raw SQLite handle is exposed for storage integration and tests; callers must hold the database mutex for concurrent access and must not close the handle themselves. Normal consumers should use the application interface.
 
@@ -46,10 +52,11 @@ Build and run the backend tests from the repository root:
 ```sh
 cmake --preset dev
 cmake --build --preset dev-build --target test_ichess_runner
+cmake --build --preset dev-build --target ichess_service
 ctest --preset dev-test -R HttpApi --output-on-failure
 ```
 
-The HTTP tests use test authentication and application implementations. Real SQLite tests additionally cover initialization/reopen, durable create/read, concurrent duplicate creation, replay authorization, idempotency expiry, rollback, and basic initial-position validation. Run those with `ctest --preset dev-test -R Sqlite --output-on-failure`. Production identity verification, game-write races, and deployment isolation are not covered yet. See [ROADMAP.md](ROADMAP.md) for the remaining implementation and release gates.
+Tests cover HTTP validation, malformed schemas, live readiness, concurrent versioned writes, retry authorization/expiry/rollback, restart repetition, promotion/checkmate, sessions, protected credential files, queue limits, and rate-limit concurrency. A real HTTP workflow combines session auth with SQLite gameplay and revocation. Run all tests with `ctest --preset dev-test --output-on-failure`. Linux execution, OIDC verification, external ingress isolation, backup restore, and load qualification still require deployment testing. See [ROADMAP.md](ROADMAP.md).
 
 ## Dependencies
 

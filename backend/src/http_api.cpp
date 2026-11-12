@@ -71,6 +71,19 @@ namespace Chess::Backend
       response.set_content(body.dump(), "application/problem+json; charset=utf-8");
     }
 
+    bool validate_unique_headers(const httplib::Request& request, httplib::Response& response)
+    {
+      for (const char* name : {"Cookie", "Origin", "X-CSRF-Token", "Idempotency-Key", "If-Match", "Content-Type"})
+      {
+        if (request.get_header_value_count(name) > 1)
+        {
+          write_problem(response, 400, "invalid_header", "Bad Request", "A request header is ambiguous.");
+          return false;
+        }
+      }
+      return true;
+    }
+
     bool authenticate(const httplib::Request& request,
                       const IRequestAuthenticator& authenticator,
                       bool state_changing,
@@ -87,6 +100,11 @@ namespace Chess::Backend
                       forbidden ? "request_forbidden" : "unauthenticated",
                       forbidden ? "Forbidden" : "Unauthorized",
                       forbidden ? "The request could not be verified." : "Authentication is required.");
+        return false;
+      }
+
+      if (!validate_unique_headers(request, response))
+      {
         return false;
       }
 
@@ -161,6 +179,33 @@ namespace Chess::Backend
       if (!request.has_param(name))
       {
         return true;
+      }
+
+      std::size_t occurrences = 0;
+      const auto query_start = request.target.find('?');
+      if (query_start != std::string::npos)
+      {
+        std::string_view remaining(request.target.data() + query_start + 1, request.target.size() - query_start - 1);
+        while (!remaining.empty())
+        {
+          const auto separator = remaining.find('&');
+          const auto pair = remaining.substr(0, separator);
+          const auto raw_name = pair.substr(0, pair.find('='));
+          if (httplib::detail::decode_url(std::string(raw_name), true) == name)
+          {
+            ++occurrences;
+          }
+          if (separator == std::string_view::npos)
+          {
+            break;
+          }
+          remaining.remove_prefix(separator + 1);
+        }
+      }
+      if (occurrences > 1 || request.get_param_value_count(name) > 1)
+      {
+        write_problem(response, 400, "invalid_query", "Bad Request", "A query parameter is invalid.");
+        return false;
       }
 
       const std::string raw = request.get_param_value(name);
@@ -270,6 +315,21 @@ namespace Chess::Backend
         {
           return false;
         }
+      }
+      return true;
+    }
+
+    bool validate_empty_body(const httplib::Request& request, httplib::Response& response)
+    {
+      Json body;
+      if (!parse_json_body(request, response, body, true))
+      {
+        return false;
+      }
+      if (!body.empty())
+      {
+        write_problem(response, 400, "unknown_field", "Bad Request", "The request contains an unsupported field.");
+        return false;
       }
       return true;
     }
@@ -429,10 +489,18 @@ namespace Chess::Backend
       write_problem(response, 500, "internal_error", "Internal Server Error", "The request could not be completed.");
     });
 
-    server.Get("/api/v1/health/live", [](const httplib::Request&, httplib::Response& response) {
+    server.Get("/api/v1/health/live", [](const httplib::Request& request, httplib::Response& response) {
+      if (!validate_unique_headers(request, response))
+      {
+        return;
+      }
       write_json(response, 200, Json{{"status", "ok"}});
     });
-    server.Get("/api/v1/health/ready", [&application](const httplib::Request&, httplib::Response& response) {
+    server.Get("/api/v1/health/ready", [&application](const httplib::Request& request, httplib::Response& response) {
+      if (!validate_unique_headers(request, response))
+      {
+        return;
+      }
       if (!application.is_ready())
       {
         write_problem(response, 503, "not_ready", "Service Unavailable", "A required service dependency is unavailable.");
@@ -546,6 +614,10 @@ namespace Chess::Backend
       {
         return;
       }
+      if (!validate_empty_body(request, response))
+      {
+        return;
+      }
       write_snapshot_result(response,
                             application.join_game(principal, path_id(request), version,
                                                   request.get_header_value("Idempotency-Key")),
@@ -654,6 +726,10 @@ namespace Chess::Backend
         }
         std::uint64_t version = 0;
         if (!parse_expected_version(request, response, version))
+        {
+          return;
+        }
+        if (!validate_empty_body(request, response))
         {
           return;
         }

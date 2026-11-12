@@ -458,7 +458,7 @@ namespace
   INSTANTIATE_TEST_SUITE_P(ConfiguredBounds, HttpApiHistoryLimitTest,
                           ::testing::Values(std::size_t{0}, std::size_t{1}, std::size_t{50}, std::size_t{200}, std::size_t{500}));
 
-  TEST(SqliteDatabaseTest, InitializesSchemaAndReopensDurableDatabase)
+  TEST(SqliteDatabaseSmokeTest, InitializesSchemaAndReopensDurableDatabase)
   {
     const auto path = std::filesystem::temp_directory_path()
                       / ("ichess-backend-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".db");
@@ -477,7 +477,7 @@ namespace
     std::filesystem::remove(path.string() + "-shm", error);
   }
 
-  TEST(SqliteDatabaseTest, InvalidDatabasePathFailsClosed)
+  TEST(SqliteDatabaseSmokeTest, InvalidDatabasePathFailsClosed)
   {
     const auto path = std::filesystem::temp_directory_path() / "ichess-missing-directory" / "games.db";
     SqliteDatabase database(path.string());
@@ -648,7 +648,7 @@ namespace
     ASSERT_EQ(sqlite3_exec(database.handle(), "DROP TABLE games", nullptr, nullptr, nullptr), SQLITE_OK);
     const auto result = application.get_game(Principal{"owner"}, "abcdefghijklmnopqrstuv");
     ASSERT_TRUE(std::holds_alternative<ApplicationError>(result));
-    EXPECT_EQ(std::get<ApplicationError>(result).status, 500);
+    EXPECT_EQ(std::get<ApplicationError>(result).status, 503);
   }
 
   TEST_F(SqliteApplicationTest, CustomFenCountersDoNotInventMoveHistory)
@@ -755,9 +755,11 @@ namespace
   {
     SqliteDatabase database(path_.string());
     SqliteGameApplication application(database);
-    ASSERT_EQ(sqlite3_exec(database.handle(),
-                          "CREATE TRIGGER reject_retry_record BEFORE INSERT ON idempotency_records "
-                          "BEGIN SELECT RAISE(ABORT, 'test failure'); END", nullptr, nullptr, nullptr), SQLITE_OK);
+    ASSERT_EQ(sqlite3_set_authorizer(database.handle(),
+      [](void*, int action, const char* table, const char*, const char*, const char*) {
+        return action == SQLITE_INSERT && table != nullptr && std::string_view(table) == "idempotency_records"
+                 ? SQLITE_DENY : SQLITE_OK;
+      }, nullptr), SQLITE_OK);
     const auto failed = application.create_game(Principal{"owner"}, {}, "0123456789abcdef");
     ASSERT_TRUE(std::holds_alternative<ApplicationError>(failed));
     EXPECT_EQ(std::get<ApplicationError>(failed).status, 500);
@@ -768,7 +770,7 @@ namespace
     EXPECT_EQ(sqlite3_column_int(statement, 0), 0);
     sqlite3_finalize(statement);
 
-    ASSERT_EQ(sqlite3_exec(database.handle(), "DROP TRIGGER reject_retry_record", nullptr, nullptr, nullptr), SQLITE_OK);
+    ASSERT_EQ(sqlite3_set_authorizer(database.handle(), nullptr, nullptr), SQLITE_OK);
     const auto retry = application.create_game(Principal{"owner"}, {}, "0123456789abcdef");
     EXPECT_TRUE(std::holds_alternative<GameSnapshot>(retry));
   }

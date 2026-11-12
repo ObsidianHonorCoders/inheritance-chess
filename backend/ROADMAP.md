@@ -2,7 +2,7 @@
 
 ## Current State
 
-The repository has seven C++20 chess-core libraries, two console executables, and an HTTP adapter library. The adapter exposes the versioned API defined in [openapi.yaml](openapi.yaml), with transport DTOs and interfaces for authentication and game operations. HTTP tests use doubles for those interfaces. A partial `SqliteGameApplication` supports durable untimed creation and participant snapshots, with real-database tests for duplicate-create concurrency, restart, retry authorization, expiry, and rollback. There is no production service executable, concrete authenticator, or complete durable game application yet.
+The repository has seven C++20 chess-core libraries, two console executables, an HTTP adapter library, and a loopback-only `ichess_service` private-preview executable. `SqliteGameApplication` implements all untimed game operations with transactional versions and retries. Concrete server-side sessions, bounded queues/rate budgets, strict HTTP validation, schema checks, and live readiness are implemented and covered by tests. Public account onboarding and timed games are not implemented. See [DEPLOYMENT.md](DEPLOYMENT.md) for the private-preview boundary.
 
 The core `ChessGameHandler` owns mutable board, timer, draw-offer, and repetition state. Do not share it concurrently between requests. Persist the initial FEN and ordered move log; reconstructing from the latest FEN alone loses repetition history. Keep public game identifiers separate from the core's identifiers.
 
@@ -10,7 +10,7 @@ The behavioral and security requirements remain in [SERVICE_CONTRACT.md](../docs
 
 ## 1. Durable Game Application
 
-Implemented foundation: pinned SQLite, schema version validation, synchronized connection ownership, atomic idempotent untimed creation, participant-only reads, 128-bit OS-generated IDs, and disposable replay-based handlers. Creation retries are retained for 24 hours. Next implement join and move transactions, the remaining read and lifecycle operations, full move-log restoration tests, clock policy, scheduled retention cleanup, and operational readiness checks. Other application operations currently fail closed with `501`; timed creation returns `422`.
+Implemented: pinned SQLite, full schema validation, synchronized connection ownership, all atomic idempotent untimed operations, participant authorization, 128-bit OS IDs, bounded history replay, restart repetition, lifecycle outcomes, and live readiness. Retry eligibility lasts 24 hours. Remaining: clock policy and persistence, scheduled retention cleanup, disk/write health monitoring, backup/restore drills, and performance qualification. Timed creation returns `422`.
 
 - Implement `IGameApplication` with participant authorization on every operation, including idempotent replay. Return the same `404` for absent and non-visible games.
 - Start with SQLite on local durable storage and one API process unless multiple instances are already required. Use PostgreSQL for multiple writers or API instances. Use parameterized queries, migrations, foreign keys, uniqueness constraints, and bounded lock waits.
@@ -23,6 +23,8 @@ Acceptance: competing writes to one version yield exactly one mutation; retries 
 
 ## 2. Verified Browser Sessions
 
+Implemented for private preview: bounded opaque server-side sessions, expiry and revocation, strict cookies, exact Origin and CSRF verification, and owner-restricted credential-file import. No public login route or trusted identity-header shortcut exists. Remaining: provider-backed onboarding, login/logout routes, rotation, durable revocation across restart, and protected token representations for persistent account sessions. File-provisioned identities are operator assignments, not OIDC assertions.
+
 - Choose an established OIDC provider for public accounts or a verified Cloudflare Access integration for a private preview. Do not implement an identity-header bypass.
 - Implement `IRequestAuthenticator` against expiring, revocable server-side sessions. Use opaque random tokens and store only protected token representations. Set `__Host-ichess_session` with `Secure`, `HttpOnly`, `Path=/`, no `Domain`, and a deliberate `SameSite` policy.
 - Verify session-bound CSRF tokens and the exact configured public `Origin` on writes. Rotate sessions at login and privilege changes, and invalidate them on logout.
@@ -31,6 +33,8 @@ Acceptance: competing writes to one version yield exactly one mutation; retries 
 Acceptance: expired, revoked, forged, and missing sessions fail closed; cross-origin writes and invalid CSRF tokens are rejected; users cannot act for an opponent or read unrelated games.
 
 ## 3. Bounded Service Runtime
+
+Implemented: loopback-only service, strict startup configuration, protected preview credentials, four workers/64 queued connections, keep-alive/socket/body limits, bounded rate state, and signal-monitor shutdown. Remaining: per-operation budgets, execution/cancellation deadlines, structured request correlation/metrics, graceful-drain/load qualification, Linux CI, and overload capacity measurements. Socket-peer limits intentionally aggregate traffic through one proxy; forwarded IPs are not trusted.
 
 - Add a service executable that supplies the concrete adapters, validates startup configuration, and binds only to loopback or a private container interface.
 - Bound worker count, queued requests, active connections, keep-alive behavior, database waits, and execution time. Return controlled overload errors rather than growing memory without limit.
@@ -52,4 +56,4 @@ Acceptance: direct-origin access fails; cookies and origin checks work through t
 
 ## Release Gate
 
-Do not expose the current adapter as a production service until phases 1-4 are implemented and verified. Keep engine search, spectators, SSE, distributed caches, and message brokers out of the first release unless a demonstrated requirement justifies them.
+Do not expose the private-preview service as a public production application until the remaining identity, operational, and deployment gates are verified. Timed play is outside the current supported subset. Keep engine search, spectators, SSE, distributed caches, and message brokers out of the first release unless a demonstrated requirement justifies them.

@@ -1,5 +1,8 @@
 #include "sqlite_database.h"
 
+#include <initializer_list>
+#include <memory>
+
 namespace Chess::Backend
 {
   namespace
@@ -7,6 +10,138 @@ namespace Chess::Backend
     bool execute(sqlite3* database, const char* sql)
     {
       return sqlite3_exec(database, sql, nullptr, nullptr, nullptr) == SQLITE_OK;
+    }
+
+    using Statement = std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)>;
+
+    Statement prepare(sqlite3* database, const char* sql)
+    {
+      sqlite3_stmt* statement = nullptr;
+      if (sqlite3_prepare_v2(database, sql, -1, &statement, nullptr) != SQLITE_OK)
+      {
+        sqlite3_finalize(statement);
+        statement = nullptr;
+      }
+      return Statement(statement, sqlite3_finalize);
+    }
+
+    bool integer_value(sqlite3* database, const char* sql, int& value)
+    {
+      auto statement = prepare(database, sql);
+      if (!statement || sqlite3_step(statement.get()) != SQLITE_ROW
+          || sqlite3_column_type(statement.get(), 0) != SQLITE_INTEGER)
+      {
+        return false;
+      }
+      value = sqlite3_column_int(statement.get(), 0);
+      return sqlite3_step(statement.get()) == SQLITE_DONE;
+    }
+
+    struct Column
+    {
+      const char* name;
+      const char* type;
+      int not_null;
+      int primary_key;
+      const char* default_value = nullptr;
+    };
+
+    bool text_equals(sqlite3_stmt* statement, int column, const char* expected)
+    {
+      const auto* actual = reinterpret_cast<const char*>(sqlite3_column_text(statement, column));
+      return expected == nullptr ? actual == nullptr
+                                 : actual != nullptr && sqlite3_stricmp(actual, expected) == 0;
+    }
+
+    bool columns_match(sqlite3* database, const char* sql, std::initializer_list<Column> columns)
+    {
+      auto statement = prepare(database, sql);
+      if (!statement)
+      {
+        return false;
+      }
+      for (const auto& column : columns)
+      {
+        if (sqlite3_step(statement.get()) != SQLITE_ROW
+            || !text_equals(statement.get(), 1, column.name)
+            || !text_equals(statement.get(), 2, column.type)
+            || sqlite3_column_int(statement.get(), 3) != column.not_null
+            || !text_equals(statement.get(), 4, column.default_value)
+            || sqlite3_column_int(statement.get(), 5) != column.primary_key
+            || sqlite3_column_int(statement.get(), 6) != 0)
+        {
+          return false;
+        }
+      }
+      return sqlite3_step(statement.get()) == SQLITE_DONE;
+    }
+
+    bool validate_schema(sqlite3* database)
+    {
+      int table_count = 0;
+      int trigger_count = 0;
+      if (!integer_value(database, "SELECT count(*) FROM sqlite_schema WHERE type = 'table' "
+                         "AND name IN ('schema_version','games','game_moves','idempotency_records')", table_count)
+          || table_count != 4
+          || !integer_value(database, "SELECT count(*) FROM sqlite_schema WHERE type = 'trigger' "
+                            "AND tbl_name IN ('schema_version','games','game_moves','idempotency_records')", trigger_count)
+          || trigger_count != 0
+          || !columns_match(database, "PRAGMA main.table_xinfo('schema_version')", {
+               {"version", "INTEGER", 0, 1}})
+          || !columns_match(database, "PRAGMA main.table_xinfo('games')", {
+               {"game_id", "TEXT", 1, 1}, {"white_principal", "TEXT", 1, 0},
+               {"black_principal", "TEXT", 0, 0}, {"initial_fen", "TEXT", 1, 0},
+               {"initial_ms", "INTEGER", 0, 0}, {"increment_ms", "INTEGER", 1, 0, "0"},
+               {"version", "INTEGER", 1, 0, "1"}, {"status", "TEXT", 1, 0, "'ongoing'"},
+               {"draw_offer_by", "TEXT", 0, 0}, {"created_at", "TEXT", 1, 0},
+               {"updated_at", "TEXT", 1, 0}})
+          || !columns_match(database, "PRAGMA main.table_xinfo('game_moves')", {
+               {"game_id", "TEXT", 1, 1}, {"ply", "INTEGER", 1, 2},
+               {"uci", "TEXT", 1, 0}, {"san", "TEXT", 1, 0}})
+          || !columns_match(database, "PRAGMA main.table_xinfo('idempotency_records')", {
+               {"principal_id", "TEXT", 1, 1}, {"operation", "TEXT", 1, 2},
+               {"idempotency_key", "TEXT", 1, 3}, {"request_fingerprint", "TEXT", 1, 0},
+               {"response_json", "TEXT", 1, 0}, {"created_at", "TEXT", 1, 0}}))
+      {
+        return false;
+      }
+
+      auto foreign_key = prepare(database, "PRAGMA main.foreign_key_list('game_moves')");
+      if (!foreign_key || sqlite3_step(foreign_key.get()) != SQLITE_ROW
+          || sqlite3_column_int(foreign_key.get(), 1) != 0
+          || !text_equals(foreign_key.get(), 2, "games")
+          || !text_equals(foreign_key.get(), 3, "game_id")
+          || !text_equals(foreign_key.get(), 4, "game_id")
+          || !text_equals(foreign_key.get(), 5, "NO ACTION")
+          || !text_equals(foreign_key.get(), 6, "CASCADE")
+          || sqlite3_step(foreign_key.get()) != SQLITE_DONE)
+      {
+        return false;
+      }
+
+      if (!execute(database, "SAVEPOINT schema_probe"))
+      {
+        return false;
+      }
+      const bool valid_game = execute(database,
+        "INSERT INTO games(game_id,white_principal,initial_fen,created_at,updated_at) "
+        "VALUES (lower(hex(randomblob(32))),'schema-probe','schema-probe','','')");
+      const auto rejects_check = [database](const char* sql)
+      {
+        return !execute(database, sql) && sqlite3_extended_errcode(database) == SQLITE_CONSTRAINT_CHECK;
+      };
+      const bool valid = valid_game
+        && rejects_check("INSERT INTO schema_version(version) VALUES(0)")
+        && rejects_check("INSERT INTO schema_version(version) VALUES(-1)")
+        && rejects_check("UPDATE games SET version=0 WHERE rowid=last_insert_rowid()")
+        && rejects_check("UPDATE games SET version=-1 WHERE rowid=last_insert_rowid()")
+        && execute(database, "INSERT INTO game_moves(game_id,ply,uci,san) "
+                            "SELECT game_id,1,'e2e4','e4' FROM games WHERE rowid=last_insert_rowid()")
+        && rejects_check("UPDATE game_moves SET ply=0 WHERE rowid=last_insert_rowid()")
+        && rejects_check("UPDATE game_moves SET ply=-1 WHERE rowid=last_insert_rowid()");
+      const bool rolled_back = execute(database, "ROLLBACK TO schema_probe");
+      const bool released = execute(database, "RELEASE schema_probe");
+      return valid && rolled_back && released;
     }
   } // namespace
 
@@ -40,7 +175,6 @@ namespace Chess::Backend
     }
 
     const char* schema = R"sql(
-      BEGIN IMMEDIATE;
       CREATE TABLE IF NOT EXISTS schema_version (
         version INTEGER PRIMARY KEY CHECK (version > 0)
       );
@@ -79,7 +213,14 @@ namespace Chess::Backend
       CREATE INDEX IF NOT EXISTS games_black_principal_idx ON games(black_principal);
       CREATE INDEX IF NOT EXISTS idempotency_created_at_idx ON idempotency_records(created_at);
     )sql";
-    if (!execute(database_, schema))
+    if (!execute(database_, "BEGIN IMMEDIATE"))
+    {
+      return;
+    }
+    int object_count = 0;
+    if (!integer_value(database_, "SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'", object_count)
+        || (object_count == 0 && !execute(database_, schema))
+        || !validate_schema(database_))
     {
       execute(database_, "ROLLBACK");
       return;
@@ -87,16 +228,18 @@ namespace Chess::Backend
 
     sqlite3_stmt* statement = nullptr;
     if (sqlite3_prepare_v2(database_, "SELECT version FROM schema_version", -1, &statement, nullptr) == SQLITE_OK
-      && sqlite3_step(statement) == SQLITE_ROW && sqlite3_column_int(statement, 0) == 1
+      && sqlite3_step(statement) == SQLITE_ROW && sqlite3_column_type(statement, 0) == SQLITE_INTEGER
+      && sqlite3_column_int64(statement, 0) == 1
       && sqlite3_step(statement) == SQLITE_DONE)
     {
-      ready_ = true;
+      initialized_ = true;
     }
     sqlite3_finalize(statement);
-    if (!ready_ || !execute(database_, "COMMIT"))
+    if (!initialized_ || !integer_value(database_, "PRAGMA main.schema_version", schema_cookie_)
+      || !execute(database_, "COMMIT"))
     {
       execute(database_, "ROLLBACK");
-      ready_ = false;
+      initialized_ = false;
     }
   }
 
@@ -110,7 +253,26 @@ namespace Chess::Backend
 
   bool SqliteDatabase::is_ready() const
   {
-    return ready_;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!initialized_ || database_ == nullptr)
+    {
+      return false;
+    }
+    auto statement = prepare(database_,
+      "SELECT version, (SELECT schema_version FROM pragma_schema_version), "
+      "(SELECT foreign_keys FROM pragma_foreign_keys), "
+      "(SELECT ignore_check_constraints FROM pragma_ignore_check_constraints), "
+      "(SELECT game_id FROM main.games LIMIT 1), "
+      "(SELECT ply FROM main.game_moves LIMIT 1), "
+      "(SELECT principal_id FROM main.idempotency_records LIMIT 1) FROM main.schema_version");
+    return statement && sqlite3_step(statement.get()) == SQLITE_ROW
+      && sqlite3_column_type(statement.get(), 0) == SQLITE_INTEGER
+      && sqlite3_column_int64(statement.get(), 0) == 1
+      && sqlite3_column_type(statement.get(), 1) == SQLITE_INTEGER
+      && sqlite3_column_int(statement.get(), 1) == schema_cookie_
+      && sqlite3_column_int(statement.get(), 2) == 1
+      && sqlite3_column_int(statement.get(), 3) == 0
+      && sqlite3_step(statement.get()) == SQLITE_DONE;
   }
 
   sqlite3* SqliteDatabase::handle() const

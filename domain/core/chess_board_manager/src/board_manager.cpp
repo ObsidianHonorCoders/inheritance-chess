@@ -373,7 +373,7 @@ namespace Chess
         }
       }
       // Check straight path
-      if (file_diff > 0)
+      else if (file_diff > 0)
       {
         int step = (move.end_pos.file > move.start_pos.file) ? 1 : -1;
         for (int f = move.start_pos.file + step; f != move.end_pos.file; f += step)
@@ -384,7 +384,7 @@ namespace Chess
           }
         }
       }
-      if (rank_diff > 0)
+      else if (rank_diff > 0)
       {
         int step = (move.end_pos.rank > move.start_pos.rank) ? 1 : -1;
         for (int r = move.start_pos.rank + step; r != move.end_pos.rank; r += step)

@@ -40,6 +40,8 @@ add_library(ichess_backend STATIC
     src/http_api.cpp
     src/sqlite_database.cpp
     src/sqlite_game_application.cpp
+    src/session_authenticator.cpp
+    src/service_runtime.cpp
 )
 
 target_include_directories(ichess_backend PUBLIC
@@ -50,6 +52,7 @@ target_link_libraries(ichess_backend
     PUBLIC
         cgh
         ctu
+        cei
         httplib::httplib
         nlohmann_json::nlohmann_json
         ichess_sqlite
@@ -59,8 +62,11 @@ set_property(TARGET ichess_backend PROPERTY CXX_STANDARD 20)
 set_property(TARGET ichess_backend PROPERTY CXX_STANDARD_REQUIRED ON)
 
 if(WIN32)
-    target_link_libraries(ichess_backend PRIVATE bcrypt)
+    target_link_libraries(ichess_backend PRIVATE bcrypt advapi32)
 endif()
+
+add_executable(ichess_service src/server_main.cpp)
+target_link_libraries(ichess_service PRIVATE ichess_backend)
 
 if(MSVC)
     target_compile_options(ichess_backend PRIVATE /W4)
