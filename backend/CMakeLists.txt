@@ -39,6 +39,7 @@ target_compile_definitions(ichess_sqlite PRIVATE
 add_library(ichess_backend STATIC
     src/http_api.cpp
     src/sqlite_database.cpp
+    src/sqlite_backup.cpp
     src/sqlite_game_application.cpp
     src/session_authenticator.cpp
     src/local_account_store.cpp

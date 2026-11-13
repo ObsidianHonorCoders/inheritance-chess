@@ -1,4 +1,5 @@
 #include "session_revocation_store.h"
+#include "sqlite_backup.h"
 #include <sqlite3.h>
 #include <array>
 #include <filesystem>
@@ -278,6 +279,11 @@ namespace Chess::Backend
     {
       return false;
     }
+  }
+
+  bool SqliteSessionRevocationStore::backup_to(const std::filesystem::path& destination) const noexcept
+  {
+    return sqlite_backup_to_file(state_->database.get(), state_->mutex, destination);
   }
 
   bool SqliteSessionRevocationStore::is_revoked(std::string_view token, std::int64_t now)

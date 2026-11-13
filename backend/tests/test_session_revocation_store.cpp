@@ -110,4 +110,22 @@ namespace
     ASSERT_EQ(result, SQLITE_OK);
     EXPECT_FALSE(store.is_ready());
   }
+
+  TEST(SessionRevocationStoreTest, OnlineBackupPreservesRevocationState)
+  {
+    TemporaryDatabasePath source_path;
+    TemporaryDatabasePath backup_path;
+    const std::string token(64, 'd');
+    {
+      SqliteSessionRevocationStore source(source_path.get().string());
+      ASSERT_TRUE(source.is_ready());
+      source.revoke(token, 500);
+      ASSERT_TRUE(source.backup_to(backup_path.get()));
+      EXPECT_FALSE(source.backup_to(backup_path.get()));
+    }
+    SqliteSessionRevocationStore restored(backup_path.get().string());
+    ASSERT_TRUE(restored.is_ready());
+    EXPECT_TRUE(restored.is_revoked(token, 400));
+    EXPECT_FALSE(restored.is_revoked(token, 500));
+  }
 }

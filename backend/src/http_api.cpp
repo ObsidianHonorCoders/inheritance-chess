@@ -669,6 +669,63 @@ namespace Chess::Backend
         }
         complete_login(sessions->issue_session(*principal), response, 200);
       });
+      server.Post("/api/v1/auth/password", [&authenticator, accounts, sessions, complete_login](
+          const httplib::Request& request, httplib::Response& response) {
+        Principal principal;
+        if (!authenticate(request, authenticator, true, response, principal)) return;
+        Json body;
+        if (!parse_json_body(request, response, body, false)) return;
+        if (!has_only_fields(body, {"currentPassword", "newPassword"}) || body.size() != 2
+            || !body["currentPassword"].is_string() || !body["newPassword"].is_string())
+        {
+          write_problem(response, 400, "invalid_password_change", "Bad Request",
+                        "Current and new passwords are required.");
+          return;
+        }
+        std::string current_password = body["currentPassword"].get<std::string>();
+        std::string new_password = body["newPassword"].get<std::string>();
+        PasswordWiper wipe_current(current_password);
+        PasswordWiper wipe_new(new_password);
+        if (new_password.size() < 12 || new_password.size() > 1024
+            || new_password.find('\0') != std::string::npos
+            || current_password.size() < 12 || current_password.size() > 1024
+            || current_password.find('\0') != std::string::npos
+            || current_password == new_password)
+        {
+          write_problem(response, 400, "invalid_password_change", "Bad Request",
+                        "The new password is invalid.");
+          return;
+        }
+        if (!accounts->authenticate(principal.id, current_password))
+        {
+          if (!accounts->is_ready())
+          {
+            write_problem(response, 503, "account_service_unavailable", "Service Unavailable",
+                          "Password change is temporarily unavailable.");
+            return;
+          }
+          write_problem(response, 401, "invalid_credentials", "Unauthorized",
+                        "The current password is incorrect.");
+          return;
+        }
+        if (!sessions->revoke_principal_sessions(principal))
+        {
+          write_problem(response, 503, "session_revocation_failed", "Service Unavailable",
+                        "Password change is temporarily unavailable.");
+          return;
+        }
+        const auto changed = accounts->change_password(principal.id, current_password, new_password);
+        if (changed != PasswordChangeResult::Changed)
+        {
+          if (changed == PasswordChangeResult::InvalidCurrentPassword)
+            write_problem(response, 401, "invalid_credentials", "Unauthorized", "The current password is incorrect.");
+          else
+            write_problem(response, 503, "account_service_unavailable", "Service Unavailable",
+                          "Password change is temporarily unavailable.");
+          return;
+        }
+        complete_login(sessions->issue_session(principal), response, 200);
+      });
       server.Post("/api/v1/auth/logout", [&authenticator, sessions](
           const httplib::Request& request, httplib::Response& response) {
         Principal principal;

@@ -50,6 +50,21 @@ namespace
     EXPECT_FALSE(accounts.authenticate("unknown", "correct horse battery staple"));
   }
 
+  TEST(LocalAccountStoreTest, ChangesPasswordOnlyAfterCurrentPasswordVerification)
+  {
+    TemporaryAccountDatabase path;
+    SqliteLocalAccountStore accounts(path.path().string());
+    ASSERT_TRUE(accounts.is_ready());
+    ASSERT_EQ(accounts.create_account("change-user", "original secure password"), AccountCreateResult::Created);
+    EXPECT_EQ(accounts.change_password("change-user", "incorrect secure password", "replacement secure password"),
+              PasswordChangeResult::InvalidCurrentPassword);
+    EXPECT_TRUE(accounts.authenticate("change-user", "original secure password"));
+    EXPECT_EQ(accounts.change_password("change-user", "original secure password", "replacement secure password"),
+              PasswordChangeResult::Changed);
+    EXPECT_FALSE(accounts.authenticate("change-user", "original secure password"));
+    EXPECT_TRUE(accounts.authenticate("change-user", "replacement secure password"));
+  }
+
   TEST(LocalAccountStoreTest, RejectsWeakPasswordsAndMalformedAccountNames)
   {
     TemporaryAccountDatabase path;
@@ -122,5 +137,21 @@ namespace
     EXPECT_EQ(sqlite3_step(statement), SQLITE_DONE);
     sqlite3_finalize(statement);
     sqlite3_close(database);
+  }
+
+  TEST(LocalAccountStoreTest, OnlineBackupRestoresAccountsAndNeverOverwritesDestination)
+  {
+    TemporaryAccountDatabase source_path;
+    TemporaryAccountDatabase backup_path;
+    SqliteLocalAccountStore source(source_path.path().string());
+    ASSERT_TRUE(source.is_ready());
+    ASSERT_EQ(source.create_account("backup-user", "a password long enough"), AccountCreateResult::Created);
+    EXPECT_TRUE(source.backup_to(backup_path.path()));
+    EXPECT_FALSE(source.backup_to(backup_path.path()));
+    SqliteLocalAccountStore restored(backup_path.path().string());
+    ASSERT_TRUE(restored.is_ready());
+    const auto principal = restored.authenticate("backup-user", "a password long enough");
+    ASSERT_TRUE(principal);
+    EXPECT_EQ(principal->id, "backup-user");
   }
 }

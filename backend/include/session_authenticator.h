@@ -35,6 +35,7 @@ namespace Chess::Backend
       virtual ~ILoginSessionManager() = default;
       virtual bool accepts_login_origin(const httplib::Request& request) const = 0;
       virtual std::optional<SessionCredentials> issue_session(const Principal& principal) = 0;
+      virtual bool revoke_principal_sessions(const Principal& principal) = 0;
       virtual bool revoke_request_session(const httplib::Request& request) = 0;
   };
 
@@ -52,6 +53,7 @@ namespace Chess::Backend
       std::optional<SessionCredentials> create_session(const Principal& principal);
       bool accepts_login_origin(const httplib::Request& request) const override;
       std::optional<SessionCredentials> issue_session(const Principal& principal) override;
+      bool revoke_principal_sessions(const Principal& principal) override;
       bool import_session(const Principal& principal, const std::string& token, std::int64_t expires);
       bool revoke_session(const std::string& token);
       bool revoke_request_session(const httplib::Request& request) override;

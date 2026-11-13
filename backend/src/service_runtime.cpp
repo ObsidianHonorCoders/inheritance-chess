@@ -544,7 +544,8 @@ namespace Chess::Backend
         rate_limited(response, limiter.retry_after());
         return httplib::Server::HandlerResponse::Handled;
       }
-      if (request.method == "POST" && request.path == "/api/v1/auth/login"
+        if (request.method == "POST" && (request.path == "/api/v1/auth/login"
+          || request.path == "/api/v1/auth/password")
           && !limiter.allow_auth_attempt(request.remote_addr, false))
       {
         rate_limited(response, limiter.retry_after());
@@ -557,7 +558,8 @@ namespace Chess::Backend
         return httplib::Server::HandlerResponse::Handled;
       }
       if (request.method == "POST"
-          && (request.path == "/api/v1/auth/login" || request.path == "/api/v1/auth/register"))
+          && (request.path == "/api/v1/auth/login" || request.path == "/api/v1/auth/register"
+            || request.path == "/api/v1/auth/password"))
       {
         if (!password_gate->try_acquire())
         {

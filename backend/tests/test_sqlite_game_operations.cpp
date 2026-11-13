@@ -298,6 +298,31 @@ namespace
     EXPECT_FALSE(application_->cleanup_expired_idempotency(1025));
   }
 
+  TEST_F(SqliteGameOperationsTest, OnlineBackupRestoresCommittedGamesAndHistory)
+  {
+    const auto game = joined();
+    const auto after_move = move(game, "e2e4");
+    const auto backup_path = path_.string() + ".backup";
+    ASSERT_TRUE(database_->backup_to(std::filesystem::path(backup_path)));
+    EXPECT_FALSE(database_->backup_to(std::filesystem::path(backup_path)));
+    {
+      SqliteDatabase backup(backup_path);
+      ASSERT_TRUE(backup.is_ready());
+      SqliteGameApplication restored(backup);
+      const auto snapshot = restored.get_game(white_, game.game_id);
+      ASSERT_TRUE(std::holds_alternative<GameSnapshot>(snapshot));
+      EXPECT_EQ(std::get<GameSnapshot>(snapshot).version, after_move.version);
+      const auto history = restored.get_move_history(black_, game.game_id, 0, 10);
+      ASSERT_TRUE(std::holds_alternative<MovePage>(history));
+      ASSERT_EQ(std::get<MovePage>(history).moves.size(), 1U);
+      EXPECT_EQ(std::get<MovePage>(history).moves.front().uci, "e2e4");
+    }
+    std::error_code cleanup_error;
+    std::filesystem::remove(backup_path, cleanup_error);
+    std::filesystem::remove(backup_path + "-wal", cleanup_error);
+    std::filesystem::remove(backup_path + "-shm", cleanup_error);
+  }
+
   TEST_F(SqliteGameOperationsTest, ResignationIsDurableTerminalAndRetryable)
   {
     const auto game = joined();

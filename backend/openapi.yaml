@@ -140,6 +140,42 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /api/v1/auth/password:
+    post:
+      operationId: changeLocalPassword
+      summary: Change the authenticated account password
+      description: Requires the current password and the session CSRF token. Existing account sessions are revoked and a fresh session is issued.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChange'
+      responses:
+        '200':
+          description: Password changed; previous sessions revoked and a new session issued.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: Password or session storage is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /api/v1/games:
     post:
       operationId: createGame
@@ -602,6 +638,21 @@ components:
         expires:
           type: integer
           format: int64
+    PasswordChange:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          minLength: 12
+          maxLength: 1024
+          format: password
+        newPassword:
+          type: string
+          minLength: 12
+          maxLength: 1024
+          format: password
     CreateGameRequest:
       type: object
       additionalProperties: false

@@ -2,6 +2,7 @@
 #define ICHESS_BACKEND_SQLITE_DATABASE
 
 #include <sqlite3.h>
+#include <filesystem>
 #include <mutex>
 #include <string>
 
@@ -17,6 +18,7 @@ namespace Chess::Backend
       SqliteDatabase& operator=(const SqliteDatabase&) = delete;
 
       bool is_ready() const;
+      bool backup_to(const std::filesystem::path& destination) const noexcept;
       sqlite3* handle() const;
       std::mutex& mutex() const;
 

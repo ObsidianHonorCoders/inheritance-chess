@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -28,6 +29,7 @@ namespace Chess::Backend
       SqliteSessionRevocationStore& operator=(const SqliteSessionRevocationStore&) = delete;
 
       bool is_ready() const noexcept;
+      bool backup_to(const std::filesystem::path& destination) const noexcept;
       bool is_revoked(std::string_view token, std::int64_t now) override;
       void revoke(std::string_view token, std::int64_t expires) override;
 

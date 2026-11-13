@@ -901,4 +901,68 @@ namespace
     std::filesystem::remove(account_path.string() + "-wal", cleanup_error);
     std::filesystem::remove(account_path.string() + "-shm", cleanup_error);
   }
+
+    TEST(LocalAuthApiTest, PasswordChangeRevokesPriorSessionsAndIssuesFreshSession)
+    {
+    const auto account_path = std::filesystem::temp_directory_path()
+      / ("ichess-auth-password-change-"
+        + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".sqlite");
+    {
+      SqliteLocalAccountStore accounts(account_path.string());
+      SessionAuthenticator authenticator({"https://chess.example.test"});
+      SqliteDatabase game_database(":memory:");
+      SqliteGameApplication application(game_database);
+      httplib::Server server;
+      register_http_api(server, authenticator, application, {}, {}, &accounts, &authenticator);
+      const int port = server.bind_to_any_port("127.0.0.1");
+      ASSERT_GT(port, 0);
+      std::thread server_thread([&] { server.listen_after_bind(); });
+      server.wait_until_ready();
+      httplib::Client client("127.0.0.1", port);
+      client.set_connection_timeout(2);
+      client.set_read_timeout(10);
+      const httplib::Headers origin{{"Origin", "https://chess.example.test"}};
+      const auto registered = client.Post("/api/v1/auth/register", origin,
+        R"({"username":"change-user","password":"original secure password"})", "application/json");
+      ASSERT_TRUE(registered);
+      ASSERT_EQ(registered->status, 201);
+      const auto registration_cookie = registered->get_header_value("Set-Cookie").substr(
+        0, registered->get_header_value("Set-Cookie").find(';'));
+
+      const auto logged_in = client.Post("/api/v1/auth/login", origin,
+        R"({"username":"change-user","password":"original secure password"})", "application/json");
+      ASSERT_TRUE(logged_in);
+      ASSERT_EQ(logged_in->status, 200);
+      const auto old_cookie = logged_in->get_header_value("Set-Cookie").substr(
+        0, logged_in->get_header_value("Set-Cookie").find(';'));
+      const auto csrf = Json::parse(logged_in->body).at("csrfToken").get<std::string>();
+      httplib::Headers change_headers{{"Cookie", old_cookie}, {"Origin", "https://chess.example.test"},
+                      {"X-CSRF-Token", csrf}};
+      const auto changed = client.Post("/api/v1/auth/password", change_headers,
+        R"({"currentPassword":"original secure password","newPassword":"replacement secure password"})",
+        "application/json");
+      ASSERT_TRUE(changed);
+      ASSERT_EQ(changed->status, 200);
+      const auto new_cookie = changed->get_header_value("Set-Cookie").substr(
+        0, changed->get_header_value("Set-Cookie").find(';'));
+      const auto new_csrf = Json::parse(changed->body).at("csrfToken").get<std::string>();
+      EXPECT_EQ(client.Get("/api/v1/session", {{"Cookie", old_cookie}})->status, 401);
+      EXPECT_EQ(client.Get("/api/v1/session", {{"Cookie", registration_cookie}})->status, 401);
+      EXPECT_EQ(client.Get("/api/v1/session", {{"Cookie", new_cookie}})->status, 200);
+      EXPECT_EQ(client.Post("/api/v1/auth/login", origin,
+        R"({"username":"change-user","password":"original secure password"})", "application/json")->status, 401);
+      const auto new_login = client.Post("/api/v1/auth/login", origin,
+        R"({"username":"change-user","password":"replacement secure password"})", "application/json");
+      ASSERT_TRUE(new_login);
+      EXPECT_EQ(new_login->status, 200);
+      EXPECT_EQ(new_csrf.size(), 64U);
+
+      server.stop();
+      server_thread.join();
+    }
+    std::error_code cleanup_error;
+    std::filesystem::remove(account_path, cleanup_error);
+    std::filesystem::remove(account_path.string() + "-wal", cleanup_error);
+    std::filesystem::remove(account_path.string() + "-shm", cleanup_error);
+    }
 } // namespace

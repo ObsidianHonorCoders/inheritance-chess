@@ -1,4 +1,5 @@
 #include "sqlite_database.h"
+#include "sqlite_backup.h"
 
 #include <initializer_list>
 #include <memory>
@@ -276,6 +277,11 @@ namespace Chess::Backend
       && sqlite3_column_int(statement.get(), 2) == 1
       && sqlite3_column_int(statement.get(), 3) == 0
       && sqlite3_step(statement.get()) == SQLITE_DONE;
+  }
+
+  bool SqliteDatabase::backup_to(const std::filesystem::path& destination) const noexcept
+  {
+    return sqlite_backup_to_file(database_, mutex_, destination);
   }
 
   sqlite3* SqliteDatabase::handle() const

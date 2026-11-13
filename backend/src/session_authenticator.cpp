@@ -210,6 +210,31 @@ namespace Chess::Backend
     return create_session(principal);
   }
 
+  bool SessionAuthenticator::revoke_principal_sessions(const Principal& principal)
+  {
+    if (!valid_principal(principal.id)) return false;
+    std::lock_guard<std::mutex> lock(mutex_);
+    prune_locked();
+    if (store_)
+    {
+      try
+      {
+        for (const auto& session : sessions_)
+        {
+          if (session.principal.id == principal.id) store_->revoke(session.token, session.expires);
+        }
+      }
+      catch (...)
+      {
+        return false;
+      }
+    }
+    sessions_.erase(std::remove_if(sessions_.begin(), sessions_.end(), [&](const Session& session) {
+      return session.principal.id == principal.id;
+    }), sessions_.end());
+    return true;
+  }
+
   bool SessionAuthenticator::accepts_login_origin(const httplib::Request& request) const
   {
     return request.get_header_value_count("Origin") == 1

@@ -1,4 +1,5 @@
 #include "local_account_store.h"
+#include "sqlite_backup.h"
 #include <sqlite3.h>
 #include <algorithm>
 #include <array>
@@ -244,6 +245,11 @@ namespace Chess::Backend
     catch (...) { return false; }
   }
 
+  bool SqliteLocalAccountStore::backup_to(const std::filesystem::path& destination) const noexcept
+  {
+    return sqlite_backup_to_file(state_->database, state_->mutex, destination);
+  }
+
   AccountCreateResult SqliteLocalAccountStore::create_account(std::string_view username,
                                                               std::string_view password) noexcept
   {
@@ -338,5 +344,89 @@ namespace Chess::Backend
       return matches ? std::optional<Principal>(Principal{*normalized}) : std::nullopt;
     }
     catch (...) { return std::nullopt; }
+  }
+
+  PasswordChangeResult SqliteLocalAccountStore::change_password(
+      std::string_view username, std::string_view current_password, std::string_view new_password) noexcept
+  {
+    std::array<unsigned char, salt_bytes> old_salt{};
+    std::array<unsigned char, hash_bytes> old_hash{};
+    std::array<unsigned char, salt_bytes> new_salt{};
+    std::array<unsigned char, hash_bytes> new_hash{};
+    struct ClearOnExit
+    {
+        std::array<unsigned char, salt_bytes>& old_salt;
+        std::array<unsigned char, hash_bytes>& old_hash;
+        std::array<unsigned char, salt_bytes>& new_salt;
+        std::array<unsigned char, hash_bytes>& new_hash;
+        ~ClearOnExit()
+        {
+          secure_clear(old_salt.data(), old_salt.size());
+          secure_clear(old_hash.data(), old_hash.size());
+          secure_clear(new_salt.data(), new_salt.size());
+          secure_clear(new_hash.data(), new_hash.size());
+        }
+    } clear{old_salt, old_hash, new_salt, new_hash};
+
+    try
+    {
+      const auto normalized = normalize_username(username);
+      if (!normalized || !valid_password(current_password) || !valid_password(new_password)
+          || current_password == new_password || !is_ready()
+          || !random_bytes(new_salt.data(), new_salt.size())
+          || !derive_password(new_password, new_salt.data(), new_hash.data()))
+        return PasswordChangeResult::Unavailable;
+
+      std::lock_guard<std::mutex> lock(state_->mutex);
+      if (!execute(state_->database, "BEGIN IMMEDIATE")) return PasswordChangeResult::Unavailable;
+      sqlite3_stmt* lookup = nullptr;
+      const bool prepared = sqlite3_prepare_v2(state_->database,
+          "SELECT salt,password_hash,hash_version FROM accounts WHERE username=?1", -1, &lookup, nullptr) == SQLITE_OK;
+      if (!prepared || sqlite3_bind_text(lookup, 1, normalized->c_str(),
+              static_cast<int>(normalized->size()), SQLITE_TRANSIENT) != SQLITE_OK
+          || sqlite3_step(lookup) != SQLITE_ROW
+          || sqlite3_column_type(lookup, 0) != SQLITE_BLOB || sqlite3_column_bytes(lookup, 0) != salt_bytes
+          || sqlite3_column_type(lookup, 1) != SQLITE_BLOB || sqlite3_column_bytes(lookup, 1) != hash_bytes
+          || sqlite3_column_type(lookup, 2) != SQLITE_INTEGER
+          || sqlite3_column_int(lookup, 2) != current_hash_version)
+      {
+        sqlite3_finalize(lookup);
+        execute(state_->database, "ROLLBACK");
+        return PasswordChangeResult::Unavailable;
+      }
+      std::copy_n(static_cast<const unsigned char*>(sqlite3_column_blob(lookup, 0)), old_salt.size(), old_salt.begin());
+      std::copy_n(static_cast<const unsigned char*>(sqlite3_column_blob(lookup, 1)), old_hash.size(), old_hash.begin());
+      sqlite3_finalize(lookup);
+
+      std::array<unsigned char, hash_bytes> verified{};
+      const bool derived = derive_password(current_password, old_salt.data(), verified.data());
+      const bool matches = derived && constant_time_equal(verified.data(), old_hash.data(), verified.size());
+      secure_clear(verified.data(), verified.size());
+      if (!matches)
+      {
+        execute(state_->database, "ROLLBACK");
+        return PasswordChangeResult::InvalidCurrentPassword;
+      }
+
+      sqlite3_stmt* update = nullptr;
+      const bool update_prepared = sqlite3_prepare_v2(state_->database,
+          "UPDATE accounts SET salt=?1,password_hash=?2,hash_version=?3 WHERE username=?4",
+          -1, &update, nullptr) == SQLITE_OK;
+      const bool update_bound = update_prepared
+          && sqlite3_bind_blob(update, 1, new_salt.data(), static_cast<int>(new_salt.size()), SQLITE_TRANSIENT) == SQLITE_OK
+          && sqlite3_bind_blob(update, 2, new_hash.data(), static_cast<int>(new_hash.size()), SQLITE_TRANSIENT) == SQLITE_OK
+          && sqlite3_bind_int(update, 3, current_hash_version) == SQLITE_OK
+          && sqlite3_bind_text(update, 4, normalized->c_str(), static_cast<int>(normalized->size()), SQLITE_TRANSIENT) == SQLITE_OK;
+      const int updated = update_bound ? sqlite3_step(update) : SQLITE_ERROR;
+      sqlite3_finalize(update);
+      if (updated != SQLITE_DONE || sqlite3_changes(state_->database) != 1
+          || !execute(state_->database, "COMMIT"))
+      {
+        execute(state_->database, "ROLLBACK");
+        return PasswordChangeResult::Unavailable;
+      }
+      return PasswordChangeResult::Changed;
+    }
+    catch (...) { return PasswordChangeResult::Unavailable; }
   }
 }
