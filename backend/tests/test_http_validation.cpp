@@ -199,7 +199,7 @@ namespace
 
   TEST_P(HttpActionBodyValidationTest, AcceptsOnlyEmptyBodyOrEmptyJsonObject)
   {
-    for (const std::string body : {"", "{}", " \r\n { } \t"})
+    for (const char* body : {"", "{}", " \r\n { } \t"})
     {
       SCOPED_TRACE(body);
       const auto response = send("POST", game_path(GetParam()), headers(), body);
@@ -222,7 +222,7 @@ namespace
 
   TEST_P(HttpActionBodyValidationTest, RejectsMalformedNonObjectAndNonemptyBodiesBeforeApplication)
   {
-    for (const std::string body : {
+    for (const char* body : {
            "{private-marker", "{} private-marker", " ", "[]", "null", "true", "42", "\"private-marker\"",
            "{\"private-marker\":1}", "{\"uci\":\"e2e4\"}", "{\"version\":1}",
            "{\"private-marker\":1,\"private-marker\":2}"})
@@ -267,7 +267,7 @@ namespace
         });
       }
       request_headers.emplace(duplicate_name, value);
-      for (const std::string suffix : {"", "/resign", "/draw-offers", "/draw-offers/accept", "/moves"})
+      for (const char* suffix : {"", "/resign", "/draw-offers", "/draw-offers/accept", "/moves"})
       {
         SCOPED_TRACE(std::string(GetParam()) + suffix);
         const auto response = send("POST", game_path(suffix), request_headers, "{}");
@@ -286,7 +286,7 @@ namespace
   {
     auto request_headers = headers();
     request_headers.emplace(GetParam(), request_headers.find(GetParam())->second);
-    for (const std::string path : {game_path(), game_path("/moves"), game_path("/legal-moves"),
+    for (const std::string& path : {game_path(), game_path("/moves"), game_path("/legal-moves"),
                                    std::string("/api/v1/session"), std::string("/api/v1/health/live"),
                                    std::string("/api/v1/health/ready")})
     {
@@ -304,7 +304,7 @@ namespace
 
   TEST_F(HttpValidationTest, RejectsDuplicateNumericQueriesBeforeApplication)
   {
-    for (const std::string query : {
+    for (const char* query : {
            "?limit=1&limit=1", "?limit=1&limit=2", "?limit=1&limit=private-marker", "?limit=&limit=1",
            "?afterPly=0&afterPly=0", "?afterPly=0&afterPly=1", "?afterPly=0&afterPly=private-marker",
            "?afterPly=&afterPly=0", "?limit=1&%6cimit=2", "?afterPly=0&%61fterPly=1"})
@@ -320,7 +320,7 @@ namespace
 
   TEST_F(HttpValidationTest, AcceptsAbsentAndSingleNumericQueries)
   {
-    for (const std::string query : {"", "?limit=1", "?afterPly=0", "?afterPly=2&limit=3"})
+    for (const char* query : {"", "?limit=1", "?afterPly=0", "?afterPly=2&limit=3"})
     {
       const auto response = send("GET", game_path("/moves") + query, headers());
       ASSERT_TRUE(response);
@@ -336,7 +336,7 @@ namespace
     request_headers.erase("If-Match");
     request_headers.erase("Idempotency-Key");
     request_headers.emplace("Content-Type", "text/private-marker");
-    for (const std::string path : {std::string("/api/v1/games"), game_path(), game_path("/resign"),
+    for (const std::string& path : {std::string("/api/v1/games"), game_path(), game_path("/resign"),
                                    game_path("/draw-offers"), game_path("/draw-offers/accept"), game_path("/moves")})
     {
       SCOPED_TRACE(path);

@@ -734,7 +734,7 @@ namespace
   {
     SqliteDatabase database(path_.string());
     SqliteGameApplication application(database);
-    for (const std::string fen : {
+    for (const char* fen : {
            "8/8/8/8/8/8/8/8 w - - 0 1",
            "8/8/8/8/8/8/4k3/4K3 w - - 0 1",
            "4k3/8/8/8/8/8/8/P3K3 w - - 0 1",

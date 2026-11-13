@@ -494,14 +494,14 @@ namespace
   TEST_F(SqliteGameOperationsTest, RestartReplayPreservesThreefoldRepetition)
   {
     auto game = joined();
-    for (const std::string uci : {"g1f3", "g8f6", "f3g1", "f6g8"})
+    for (const char* uci : {"g1f3", "g8f6", "f3g1", "f6g8"})
     {
       game = move(game, uci);
     }
     EXPECT_EQ(game.status, "ongoing");
     reopen();
     game = success(application_->get_game(white_, game.game_id));
-    for (const std::string uci : {"g1f3", "g8f6", "f3g1", "f6g8"})
+    for (const char* uci : {"g1f3", "g8f6", "f3g1", "f6g8"})
     {
       game = move(game, uci);
     }
@@ -545,7 +545,7 @@ namespace
   TEST_F(SqliteGameOperationsTest, CheckmatePersistsAndSuppressesLegalMoves)
   {
     auto game = joined();
-    for (const std::string uci : {"f2f3", "e7e5", "g2g4", "d8h4"})
+    for (const char* uci : {"f2f3", "e7e5", "g2g4", "d8h4"})
     {
       game = move(game, uci);
     }
@@ -700,7 +700,7 @@ namespace
 
   TEST_F(SqliteGameOperationsTest, RejectsInconsistentCastlingAndEnPassantFenMetadata)
   {
-    for (const std::string fen : {
+    for (const char* fen : {
       "4k3/8/8/8/8/8/8/4K3 w K - 0 1",
       "4k3/8/8/8/8/8/8/3K3R w K - 0 1",
       "4k3/8/8/8/8/8/8/r3K3 w Q - 0 1",

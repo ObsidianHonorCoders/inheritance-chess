@@ -24,7 +24,7 @@ target_include_directories(ctu PRIVATE
 )
 
 # Dependencies
-target_link_libraries(ctu PUBLIC cci cbm)
+target_link_libraries(ctu PUBLIC cci cbm cei)
 
 # Compiler-specific options
 if(MSVC)

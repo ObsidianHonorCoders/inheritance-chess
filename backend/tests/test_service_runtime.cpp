@@ -82,7 +82,7 @@ namespace
     EXPECT_EQ(parse_service_port("65535"), 65535);
     for (const auto* port : {"", "0", "65536", "-1", "+80", " 80", "80x", "99999999999"})
       EXPECT_THROW(parse_service_port(port), std::runtime_error);
-    const auto root = std::filesystem::temp_directory_path();
+    const auto root = std::filesystem::current_path();
     ServiceRuntimeConfig config{"https://chess.test", root / "private-preview.json", root / "preview.sqlite",
                   root / "preview-revocations.sqlite", root / "preview-accounts.sqlite", 8080};
     EXPECT_NO_THROW(validate_runtime_config(config));
