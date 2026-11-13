@@ -36,6 +36,7 @@ namespace Chess::Backend
         std::chrono::steady_clock::time_point start;
         std::uint64_t id = 0;
         bool active = false;
+        bool password_slot = false;
     };
 
     thread_local RequestScope request_scope;
@@ -202,6 +203,7 @@ namespace Chess::Backend
       response.set_header("Cache-Control", "no-store");
       response.set_header("Retry-After", std::to_string(retry.count()));
       response.set_header("X-Content-Type-Options", "nosniff");
+      response.set_header("Connection", "close");
       response.set_content(R"({"type":"about:blank","title":"Too Many Requests","status":429,"detail":"Request limit reached."})",
                            "application/problem+json");
     }
@@ -488,20 +490,48 @@ namespace Chess::Backend
     return metrics_;
   }
 
+  PasswordWorkGate::PasswordWorkGate(std::size_t maximum) : maximum_(maximum)
+  {
+    if (maximum_ == 0 || maximum_ > 4) invalid_configuration();
+  }
+
+  bool PasswordWorkGate::try_acquire() noexcept
+  {
+    auto active = active_.load(std::memory_order_relaxed);
+    while (active < maximum_)
+    {
+      if (active_.compare_exchange_weak(active, active + 1,
+          std::memory_order_acquire, std::memory_order_relaxed)) return true;
+    }
+    return false;
+  }
+
+  void PasswordWorkGate::release() noexcept
+  {
+    auto active = active_.load(std::memory_order_relaxed);
+    while (active != 0 && !active_.compare_exchange_weak(active, active - 1,
+        std::memory_order_release, std::memory_order_relaxed)) {}
+  }
+
   void configure_service_runtime(httplib::Server& server, const SessionAuthenticator& authenticator,
                                  ServiceRateLimiter& limiter, RuntimeObserver* observer, RuntimeOptions options)
   {
     if (options.execution_timeout < std::chrono::milliseconds(1)
-        || options.execution_timeout > std::chrono::milliseconds(60000)) invalid_configuration();
+        || options.execution_timeout > std::chrono::milliseconds(60000)
+        || options.max_concurrent_password_hashes == 0 || options.max_concurrent_password_hashes > 4)
+      invalid_configuration();
     server.new_task_queue = [] { return new httplib::ThreadPool(4, 64); };
     server.set_keep_alive_max_count(16);
     server.set_keep_alive_timeout(2);
     server.set_read_timeout(5);
     server.set_write_timeout(10);
     server.set_payload_max_length(16 * 1024);
-    server.set_pre_routing_handler([&authenticator, &limiter, options](const httplib::Request& request,
+    auto password_gate = std::make_shared<PasswordWorkGate>(options.max_concurrent_password_hashes);
+    server.set_pre_routing_handler([&authenticator, &limiter, options, password_gate](const httplib::Request& request,
                                                             httplib::Response& response) {
       request_scope.budget.reset();
+      if (request_scope.password_slot) password_gate->release();
+      request_scope.password_slot = false;
       request_scope.active = false;
       request_scope.start = std::chrono::steady_clock::now();
       request_scope.id = next_request_id.fetch_add(1, std::memory_order_relaxed);
@@ -526,6 +556,16 @@ namespace Chess::Backend
         rate_limited(response, limiter.retry_after());
         return httplib::Server::HandlerResponse::Handled;
       }
+      if (request.method == "POST"
+          && (request.path == "/api/v1/auth/login" || request.path == "/api/v1/auth/register"))
+      {
+        if (!password_gate->try_acquire())
+        {
+          rate_limited(response, std::chrono::seconds(1));
+          return httplib::Server::HandlerResponse::Handled;
+        }
+        request_scope.password_slot = true;
+      }
       if (request.path == "/api/v1" || request.path.compare(0, 8, "/api/v1/") == 0)
       {
         const auto principal = authenticator.principal_for(request);
@@ -548,12 +588,14 @@ namespace Chess::Backend
       response.headers.erase("X-Request-ID");
       response.set_header("X-Request-ID", correlation_id(request_scope.id));
     });
-    server.set_logger([observer](const httplib::Request& request, const httplib::Response& response) {
+    server.set_logger([observer, password_gate](const httplib::Request& request, const httplib::Response& response) {
       const auto active = request_scope.active;
       const auto id = active ? request_scope.id : next_request_id.fetch_add(1, std::memory_order_relaxed);
       const auto duration = active ? std::chrono::duration<double, std::milli>(
           std::chrono::steady_clock::now() - request_scope.start).count() : 0.0;
       request_scope.budget.reset();
+      if (request_scope.password_slot) password_gate->release();
+      request_scope.password_slot = false;
       request_scope.active = false;
       if (observer)
         observer->record({id, normalized_method(request.method), normalized_route(request.path),

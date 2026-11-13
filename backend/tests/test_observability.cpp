@@ -287,5 +287,9 @@ namespace
                  {std::chrono::milliseconds(0)}), std::runtime_error);
     EXPECT_THROW(configure_service_runtime(server, auth, limiter, nullptr,
                  {std::chrono::milliseconds(60001)}), std::runtime_error);
+    EXPECT_THROW(configure_service_runtime(server, auth, limiter, nullptr,
+                 {std::chrono::milliseconds(2000), 0}), std::runtime_error);
+    EXPECT_THROW(configure_service_runtime(server, auth, limiter, nullptr,
+                 {std::chrono::milliseconds(2000), 5}), std::runtime_error);
   }
 }

@@ -120,6 +120,19 @@ namespace Chess::Backend
   struct RuntimeOptions
   {
       std::chrono::milliseconds execution_timeout{2000};
+      std::size_t max_concurrent_password_hashes = 2;
+  };
+
+  class PasswordWorkGate final
+  {
+    public:
+      explicit PasswordWorkGate(std::size_t maximum);
+      bool try_acquire() noexcept;
+      void release() noexcept;
+
+    private:
+      const std::size_t maximum_;
+      std::atomic<std::size_t> active_{0};
   };
 
   void configure_service_runtime(httplib::Server& server, const SessionAuthenticator& authenticator,

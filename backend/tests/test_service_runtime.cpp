@@ -5,8 +5,10 @@
 #include <nlohmann/json.hpp>
 #include <atomic>
 #include <array>
+#include <condition_variable>
 #include <fstream>
 #include <future>
+#include <mutex>
 #ifdef _WIN32
 #include <windows.h>
 #include <aclapi.h>
@@ -256,6 +258,22 @@ namespace
     EXPECT_EQ(Json::parse(limited->body)["status"], 429);
     EXPECT_EQ(limiter.state_size().first, 1U);
     EXPECT_EQ(limiter.state_size().second, 1U);
+  }
+
+  TEST(PasswordWorkGateTest, BoundsConcurrentWorkAndReleasesCapacity)
+  {
+    PasswordWorkGate gate(2);
+    EXPECT_TRUE(gate.try_acquire());
+    EXPECT_TRUE(gate.try_acquire());
+    EXPECT_FALSE(gate.try_acquire());
+    gate.release();
+    EXPECT_TRUE(gate.try_acquire());
+    gate.release();
+    gate.release();
+    EXPECT_TRUE(gate.try_acquire());
+    gate.release();
+    EXPECT_THROW(PasswordWorkGate invalid(0), std::runtime_error);
+    EXPECT_THROW(PasswordWorkGate invalid(5), std::runtime_error);
   }
 
   TEST(ServiceRuntimeTest, UnauthenticatedHealthIsPeerLimitedAndForwardedHeadersCannotBypass)

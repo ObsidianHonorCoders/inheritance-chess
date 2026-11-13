@@ -90,4 +90,37 @@ namespace
     ASSERT_EQ(result, SQLITE_OK);
     EXPECT_FALSE(accounts.is_ready());
   }
+
+  TEST(LocalAccountStoreTest, MigratesLegacyPasswordRowsToExplicitHashVersion)
+  {
+    TemporaryAccountDatabase path;
+    sqlite3* database = nullptr;
+    ASSERT_EQ(sqlite3_open(path.path().string().c_str(), &database), SQLITE_OK);
+    const auto created = sqlite3_exec(database,
+        "CREATE TABLE accounts(username TEXT PRIMARY KEY NOT NULL CHECK(length(username) BETWEEN 3 AND 32),"
+        "salt BLOB NOT NULL CHECK(length(salt)=16),password_hash BLOB NOT NULL CHECK(length(password_hash)=32),"
+        "created_at INTEGER NOT NULL) WITHOUT ROWID;"
+        "PRAGMA user_version=1;"
+        "INSERT INTO accounts(username,salt,password_hash,created_at) "
+        "VALUES('legacy-user',zeroblob(16),zeroblob(32),unixepoch());",
+        nullptr, nullptr, nullptr);
+    sqlite3_close(database);
+    ASSERT_EQ(created, SQLITE_OK);
+
+    SqliteLocalAccountStore accounts(path.path().string());
+    ASSERT_TRUE(accounts.is_ready());
+    ASSERT_EQ(sqlite3_open(path.path().string().c_str(), &database), SQLITE_OK);
+    sqlite3_stmt* statement = nullptr;
+    ASSERT_EQ(sqlite3_prepare_v2(database, "PRAGMA user_version", -1, &statement, nullptr), SQLITE_OK);
+    ASSERT_EQ(sqlite3_step(statement), SQLITE_ROW);
+    EXPECT_EQ(sqlite3_column_int(statement, 0), 2);
+    sqlite3_finalize(statement);
+    ASSERT_EQ(sqlite3_prepare_v2(database,
+        "SELECT hash_version FROM accounts WHERE username='legacy-user'", -1, &statement, nullptr), SQLITE_OK);
+    ASSERT_EQ(sqlite3_step(statement), SQLITE_ROW);
+    EXPECT_EQ(sqlite3_column_int(statement, 0), 1);
+    EXPECT_EQ(sqlite3_step(statement), SQLITE_DONE);
+    sqlite3_finalize(statement);
+    sqlite3_close(database);
+  }
 }

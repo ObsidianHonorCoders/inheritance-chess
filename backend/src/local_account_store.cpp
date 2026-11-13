@@ -23,12 +23,19 @@ namespace Chess::Backend
     constexpr int pbkdf2_iterations = 600000;
     constexpr int salt_bytes = 16;
     constexpr int hash_bytes = 32;
+    constexpr int current_hash_version = 1;
     constexpr sqlite3_int64 maximum_accounts = 100000;
-    constexpr char schema[] = "CREATE TABLE accounts("
+    constexpr char schema_v1[] = "CREATE TABLE accounts("
         "username TEXT PRIMARY KEY NOT NULL CHECK(length(username) BETWEEN 3 AND 32),"
         "salt BLOB NOT NULL CHECK(length(salt)=16),"
         "password_hash BLOB NOT NULL CHECK(length(password_hash)=32),"
         "created_at INTEGER NOT NULL) WITHOUT ROWID";
+    constexpr char schema[] = "CREATE TABLE accounts("
+      "username TEXT PRIMARY KEY NOT NULL CHECK(length(username) BETWEEN 3 AND 32),"
+      "salt BLOB NOT NULL CHECK(length(salt)=16),"
+      "password_hash BLOB NOT NULL CHECK(length(password_hash)=32),"
+      "created_at INTEGER NOT NULL, "
+      "hash_version INTEGER NOT NULL DEFAULT 1 CHECK(hash_version BETWEEN 1 AND 10)) WITHOUT ROWID";
 
     bool valid_username(std::string_view username)
     {
@@ -108,31 +115,47 @@ namespace Chess::Backend
       return sqlite3_exec(database, sql, nullptr, nullptr, nullptr) == SQLITE_OK;
     }
 
-    bool schema_valid(sqlite3* database)
+    bool scalar_integer_is(sqlite3* database, const char* sql, sqlite3_int64 expected)
     {
       sqlite3_stmt* statement = nullptr;
-      if (sqlite3_prepare_v2(database,
-          "SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'", -1, &statement, nullptr) != SQLITE_OK)
-        return false;
-      const bool single_object = sqlite3_step(statement) == SQLITE_ROW && sqlite3_column_int64(statement, 0) == 1
-          && sqlite3_step(statement) == SQLITE_DONE;
-      sqlite3_finalize(statement);
-      if (!single_object) return false;
-      if (sqlite3_prepare_v2(database, "PRAGMA user_version", -1, &statement, nullptr) != SQLITE_OK) return false;
-      const bool version_one = sqlite3_step(statement) == SQLITE_ROW && sqlite3_column_int(statement, 0) == 1
-          && sqlite3_step(statement) == SQLITE_DONE;
-      sqlite3_finalize(statement);
-      if (!version_one) return false;
-      statement = nullptr;
-      if (sqlite3_prepare_v2(database,
-          "SELECT sql FROM sqlite_schema WHERE type='table' AND name='accounts'", -1, &statement, nullptr) != SQLITE_OK)
-        return false;
+      if (sqlite3_prepare_v2(database, sql, -1, &statement, nullptr) != SQLITE_OK) return false;
       const bool valid = sqlite3_step(statement) == SQLITE_ROW
-          && sqlite3_column_type(statement, 0) == SQLITE_TEXT
-          && std::string_view(reinterpret_cast<const char*>(sqlite3_column_text(statement, 0))) == schema
+          && sqlite3_column_type(statement, 0) == SQLITE_INTEGER
+          && sqlite3_column_int64(statement, 0) == expected
           && sqlite3_step(statement) == SQLITE_DONE;
       sqlite3_finalize(statement);
       return valid;
+    }
+
+    bool scalar_text_is(sqlite3* database, const char* sql, std::string_view expected)
+    {
+      sqlite3_stmt* statement = nullptr;
+      if (sqlite3_prepare_v2(database, sql, -1, &statement, nullptr) != SQLITE_OK) return false;
+      const auto* value = sqlite3_step(statement) == SQLITE_ROW
+          ? reinterpret_cast<const char*>(sqlite3_column_text(statement, 0)) : nullptr;
+      const bool valid = value != nullptr && std::string_view(value) == expected
+          && sqlite3_step(statement) == SQLITE_DONE;
+      sqlite3_finalize(statement);
+      return valid;
+    }
+
+    bool schema_objects_match(sqlite3* database, int version, const char* expected_schema)
+    {
+      return scalar_integer_is(database,
+          "SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'", 1)
+          && scalar_integer_is(database, "PRAGMA user_version", version)
+          && scalar_text_is(database,
+              "SELECT sql FROM sqlite_schema WHERE type='table' AND name='accounts'", expected_schema);
+    }
+
+    bool schema_v1_valid(sqlite3* database)
+    {
+      return schema_objects_match(database, 1, schema_v1);
+    }
+
+    bool schema_valid(sqlite3* database)
+    {
+      return schema_objects_match(database, 2, schema);
     }
 
     void secure_clear(unsigned char* bytes, std::size_t length)
@@ -153,8 +176,15 @@ namespace Chess::Backend
       bool ready() const noexcept
       {
         std::error_code error;
+        int defensive = 0;
         return database != nullptr && std::filesystem::is_regular_file(path, error) && !error
-            && schema_valid(database) && sqlite3_db_readonly(database, "main") == 0;
+            && schema_valid(database) && sqlite3_db_readonly(database, "main") == 0
+            && scalar_text_is(database, "PRAGMA journal_mode", "wal")
+            && scalar_integer_is(database, "PRAGMA synchronous", 2)
+            && scalar_integer_is(database, "PRAGMA trusted_schema", 0)
+            && scalar_integer_is(database, "PRAGMA foreign_keys", 1)
+            && sqlite3_db_config(database, SQLITE_DBCONFIG_DEFENSIVE, -1, &defensive) == SQLITE_OK
+            && defensive == 1;
       }
   };
 
@@ -182,10 +212,24 @@ namespace Chess::Backend
         && sqlite3_step(count_statement) == SQLITE_ROW)
       empty = sqlite3_column_int64(count_statement, 0) == 0;
     sqlite3_finalize(count_statement);
-    const bool initialized = (empty && execute(state_->database, schema)
-        && execute(state_->database, "PRAGMA user_version=1")) || schema_valid(state_->database);
-    if (initialized) execute(state_->database, "COMMIT");
-    else execute(state_->database, "ROLLBACK");
+    bool initialized = false;
+    if (empty)
+    {
+      initialized = execute(state_->database, schema) && execute(state_->database, "PRAGMA user_version=2");
+    }
+    else if (schema_v1_valid(state_->database))
+    {
+      initialized = execute(state_->database,
+          "ALTER TABLE accounts ADD COLUMN hash_version INTEGER NOT NULL DEFAULT 1 "
+          "CHECK(hash_version BETWEEN 1 AND 10)")
+          && execute(state_->database, "PRAGMA user_version=2");
+    }
+    else
+    {
+      initialized = schema_valid(state_->database);
+    }
+    if (initialized) initialized = execute(state_->database, "COMMIT");
+    if (!initialized) execute(state_->database, "ROLLBACK");
   }
 
   SqliteLocalAccountStore::~SqliteLocalAccountStore() = default;
@@ -231,12 +275,14 @@ namespace Chess::Backend
       }
       sqlite3_stmt* statement = nullptr;
       const bool prepared = sqlite3_prepare_v2(state_->database,
-          "INSERT INTO accounts(username,salt,password_hash,created_at) VALUES(?1,?2,?3,unixepoch())",
+          "INSERT INTO accounts(username,salt,password_hash,created_at,hash_version) "
+          "VALUES(?1,?2,?3,unixepoch(),?4)",
           -1, &statement, nullptr) == SQLITE_OK;
       const bool bound = prepared
           && sqlite3_bind_text(statement, 1, normalized->c_str(), static_cast<int>(normalized->size()), SQLITE_TRANSIENT) == SQLITE_OK
           && sqlite3_bind_blob(statement, 2, salt.data(), static_cast<int>(salt.size()), SQLITE_TRANSIENT) == SQLITE_OK
-          && sqlite3_bind_blob(statement, 3, hash.data(), static_cast<int>(hash.size()), SQLITE_TRANSIENT) == SQLITE_OK;
+          && sqlite3_bind_blob(statement, 3, hash.data(), static_cast<int>(hash.size()), SQLITE_TRANSIENT) == SQLITE_OK
+          && sqlite3_bind_int(statement, 4, current_hash_version) == SQLITE_OK;
       const int result = bound ? sqlite3_step(statement) : SQLITE_ERROR;
       sqlite3_finalize(statement);
       const int error = sqlite3_extended_errcode(state_->database);
@@ -264,16 +310,20 @@ namespace Chess::Backend
         std::lock_guard<std::mutex> lock(state_->mutex);
         sqlite3_stmt* statement = nullptr;
         if (sqlite3_prepare_v2(state_->database,
-            "SELECT salt,password_hash FROM accounts WHERE username=?1", -1, &statement, nullptr) != SQLITE_OK)
+          "SELECT salt,password_hash,hash_version FROM accounts WHERE username=?1", -1, &statement, nullptr) != SQLITE_OK)
           return std::nullopt;
         if (sqlite3_bind_text(statement, 1, normalized->c_str(), static_cast<int>(normalized->size()), SQLITE_TRANSIENT) == SQLITE_OK
             && sqlite3_step(statement) == SQLITE_ROW
             && sqlite3_column_type(statement, 0) == SQLITE_BLOB && sqlite3_column_bytes(statement, 0) == salt_bytes
             && sqlite3_column_type(statement, 1) == SQLITE_BLOB && sqlite3_column_bytes(statement, 1) == hash_bytes)
         {
-          std::copy_n(static_cast<const unsigned char*>(sqlite3_column_blob(statement, 0)), salt.size(), salt.begin());
-          std::copy_n(static_cast<const unsigned char*>(sqlite3_column_blob(statement, 1)), expected.size(), expected.begin());
-          found = true;
+          const auto stored_version = sqlite3_column_int(statement, 2);
+          if (sqlite3_column_type(statement, 2) == SQLITE_INTEGER && stored_version == current_hash_version)
+          {
+            std::copy_n(static_cast<const unsigned char*>(sqlite3_column_blob(statement, 0)), salt.size(), salt.begin());
+            std::copy_n(static_cast<const unsigned char*>(sqlite3_column_blob(statement, 1)), expected.size(), expected.begin());
+            found = true;
+          }
         }
         sqlite3_finalize(statement);
       }
