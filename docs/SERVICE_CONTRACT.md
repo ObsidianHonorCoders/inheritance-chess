@@ -12,7 +12,7 @@ This document defines the first browser-facing service boundary. The machine-rea
 - Initial FEN is optional and defaults to the standard position. Only standard chess is supported; variants are not implied.
 - Optional time control is simple initial-time-only (1 ms to 24 hours, no increment). White's clock starts when Black joins. Remaining balances and a UTC start timestamp persist across restart; a background worker commits timeouts without requiring a client request. Host wall-clock synchronization is required.
 - Game mutations after creation require the latest game ETag in `If-Match`. A successful mutation returns the complete new snapshot and its new ETag. Creation instead requires an idempotency key.
-- Every state-changing request requires an `Idempotency-Key`. Reuse it only to retry the same logical request after an uncertain network result; reusing it with a different payload is a conflict.
+- Every game-state mutation requires an `Idempotency-Key`. Reuse it only to retry the same logical request after an uncertain network result; reusing it with a different payload is a conflict. Authentication operations use session revocation and password verification instead.
 - Idempotency records are scoped to the authenticated principal and route, retained for a documented bounded period, and checked before applying a fresh version precondition on a completed retry. Reauthorize the request before replaying a stored response.
 - Moves use lowercase UCI coordinates such as `e2e4` or `e7e8q`; SAN is presentation/history data, not the command format.
 - All errors use `application/problem+json` (RFC 9457) with a stable application `code`. Do not return stack traces, SQL details, filesystem paths, or internal C++ diagnostics.
@@ -23,6 +23,11 @@ This document defines the first browser-facing service boundary. The machine-rea
 |---|---|---|
 | `GET /api/v1/health/live` | Process liveness | No dependency or deployment details in the response. Keep it private to the proxy/health-check network. |
 | `GET /api/v1/health/ready` | Dependency readiness | Returns `503` if required storage is unavailable; keep private to the proxy/health-check network. |
+| `POST /api/v1/auth/register` | Register local account | Exact `Origin`; returns secure HttpOnly session cookie and CSRF token. May be disabled by operator. |
+| `POST /api/v1/auth/login` | Login local account | Exact `Origin`; generic credential failures; returns secure HttpOnly session cookie and CSRF token. |
+| `POST /api/v1/auth/logout` | Revoke current session | Requires exact `Origin` and session CSRF token; expires browser cookie. |
+| `POST /api/v1/auth/password` | Change password | Requires current password, exact `Origin`, and CSRF; revokes existing sessions and issues a fresh one. |
+| `POST /api/v1/auth/delete` | Delete account | Requires current password, exact `Origin`, and CSRF; revokes sessions and anonymizes retained games/history. |
 | `GET /api/v1/session` | Session/CSRF bootstrap | Requires an established session; returns a session-bound CSRF token without exposing the internal principal ID. Send `Cache-Control: no-store`. |
 | `POST /api/v1/games` | Create game | Requires `Idempotency-Key`; retries with the same key and same request return the original result. Creator is White. |
 | `GET /api/v1/games/{gameId}` | Read snapshot | Requires a participant session; use `ETag` for subsequent writes. |

@@ -9,7 +9,7 @@
 - `IGameApplication` owns authorization, versioned/idempotent operations, and repository transactions. Its implementation must enforce game-seat ownership and persist initial FEN plus the ordered move log.
 - `api_types.h` contains transport-neutral API DTOs and safe application errors.
 
-`ichess_service` composes SQLite gameplay and concrete server-side session authentication for a restricted private preview. It binds only to `127.0.0.1`. There is no identity-header bypass, public session-minting route, or public account login flow. See [DEPLOYMENT.md](DEPLOYMENT.md) before configuring ingress. This is not a production-readiness certification.
+`ichess_service` composes SQLite gameplay and concrete server-side sessions for a restricted private preview. It binds only to `127.0.0.1`. Local account registration, login, password change, and deletion are exposed as same-origin routes; no identity-header bypass or public session-minting route exists. See [FRONTEND_INTEGRATION.md](FRONTEND_INTEGRATION.md) for browser request examples and [DEPLOYMENT.md](DEPLOYMENT.md) before configuring ingress. This is not a production-readiness certification.
 
 ## SQLite Application Foundation
 
