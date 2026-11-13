@@ -59,8 +59,8 @@ namespace Chess::Backend
       for (const char* character = source_name;
            *character != '\0'; ++character)
         source_utf8.push_back(static_cast<char8_t>(*character));
-        const auto source_path = std::filesystem::absolute(
-          std::filesystem::path(source_utf8), error).lexically_normal();
+      const auto source_path = std::filesystem::absolute(
+        std::filesystem::path(source_utf8), error).lexically_normal();
       if (error || source_path == normalized) return false;
       if (std::filesystem::exists(source_path, error) && !error
           && std::filesystem::exists(normalized, error) && !error
@@ -73,7 +73,7 @@ namespace Chess::Backend
           SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_EXCLUSIVE | SQLITE_OPEN_FULLMUTEX, nullptr);
       const std::unique_ptr<sqlite3, DatabaseCloser> target(raw_destination);
       if (opened != SQLITE_OK || target == nullptr) return false;
-        remove_partial.armed = true;
+      remove_partial.armed = true;
       if (sqlite3_busy_timeout(target.get(), 1000) != SQLITE_OK) return false;
       sqlite3_backup* raw_backup = sqlite3_backup_init(target.get(), "main", source, "main");
       std::unique_ptr<sqlite3_backup, BackupCloser> backup(raw_backup);

@@ -21,11 +21,41 @@ FetchContent_Declare(nlohmann_json
 FetchContent_MakeAvailable(nlohmann_json)
 
 FetchContent_Declare(sqlite3
-    URL https://www.sqlite.org/2025/sqlite-amalgamation-3500400.zip
-    URL_HASH SHA256=1D3049DD0F830A025A53105FC79FD2AB9431AEA99E137809D064D8EE8356B032
+    URL https://www.sqlite.org/2026/sqlite-amalgamation-3540100.zip
+    URL_HASH SHA256=0A9C8E34352DAD46006AA82836D5383BFF9DC6BC9CE5A60553C05AA30E6AD1F9
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(sqlite3)
+
+set(SQLITE3_SOURCE "${sqlite3_SOURCE_DIR}/sqlite3.c")
+file(READ "${SQLITE3_SOURCE}" SQLITE3_SOURCE_CONTENT)
+# Keep SQLite's bundled source warning-clean under the repository's -Werror flags.
+macro(sqlite3_apply_warning_fix old_text new_text)
+    string(FIND "${SQLITE3_SOURCE_CONTENT}" "${old_text}" OLD_TEXT_POSITION)
+    if(OLD_TEXT_POSITION EQUAL -1)
+        string(FIND "${SQLITE3_SOURCE_CONTENT}" "${new_text}" NEW_TEXT_POSITION)
+        if(NEW_TEXT_POSITION EQUAL -1)
+            message(FATAL_ERROR "Expected SQLite warning site was not found: ${old_text}")
+        endif()
+    else()
+        string(REPLACE "${old_text}" "${new_text}" SQLITE3_SOURCE_CONTENT "${SQLITE3_SOURCE_CONTENT}")
+    endif()
+endmacro()
+
+sqlite3_apply_warning_fix(
+    "return 0x3fffffff & (int)strlen(z);"
+    "const char *zEnd = z;\n  while( *zEnd ) zEnd++;\n  return 0x3fffffff & (int)(zEnd-z);"
+)
+sqlite3_apply_warning_fix(
+    "  DWORD nMs\n){\n  DWORD flags"
+    "  DWORD nMs\n){\n  (void)nMs;\n  DWORD flags"
+)
+sqlite3_apply_warning_fix(
+    "static int winUnfetch(sqlite3_file *fd, i64 iOff, void *p){\n#if SQLITE_MAX_MMAP_SIZE>0"
+    "static int winUnfetch(sqlite3_file *fd, i64 iOff, void *p){\n  (void)iOff;\n#if SQLITE_MAX_MMAP_SIZE>0"
+)
+file(WRITE "${SQLITE3_SOURCE}" "${SQLITE3_SOURCE_CONTENT}")
+unset(SQLITE3_SOURCE_CONTENT)
 
 add_library(ichess_sqlite STATIC ${sqlite3_SOURCE_DIR}/sqlite3.c)
 target_include_directories(ichess_sqlite PUBLIC ${sqlite3_SOURCE_DIR})
