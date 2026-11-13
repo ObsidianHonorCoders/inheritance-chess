@@ -16,6 +16,8 @@ namespace Chess::Backend
 
       bool is_ready() const override;
       bool cleanup_expired_idempotency(std::size_t maximum_records = 256) noexcept;
+      bool expire_timed_games(std::size_t maximum_games, std::size_t& expired) noexcept;
+      bool anonymize_principal(const Principal& principal) noexcept override;
       std::uint64_t maintenance_failures() const noexcept;
       std::uint64_t maintenance_deleted_records() const noexcept;
       Result<GameSnapshot> create_game(const Principal& principal, const CreateGameCommand& command,

@@ -36,6 +36,8 @@ namespace Chess::Backend
       virtual bool accepts_login_origin(const httplib::Request& request) const = 0;
       virtual std::optional<SessionCredentials> issue_session(const Principal& principal) = 0;
       virtual bool revoke_principal_sessions(const Principal& principal) = 0;
+      virtual bool block_principal(const Principal& principal) = 0;
+      virtual void unblock_principal(const Principal& principal) noexcept = 0;
       virtual bool revoke_request_session(const httplib::Request& request) = 0;
   };
 
@@ -54,6 +56,8 @@ namespace Chess::Backend
       bool accepts_login_origin(const httplib::Request& request) const override;
       std::optional<SessionCredentials> issue_session(const Principal& principal) override;
       bool revoke_principal_sessions(const Principal& principal) override;
+      bool block_principal(const Principal& principal) override;
+      void unblock_principal(const Principal& principal) noexcept override;
       bool import_session(const Principal& principal, const std::string& token, std::int64_t expires);
       bool revoke_session(const std::string& token);
       bool revoke_request_session(const httplib::Request& request) override;
@@ -84,6 +88,7 @@ namespace Chess::Backend
       std::shared_ptr<ISessionRevocationStore> store_;
       mutable std::mutex mutex_;
       mutable std::vector<Session> sessions_;
+      std::vector<Principal> blocked_principals_;
   };
 }
 

@@ -149,6 +149,12 @@ namespace Chess::Backend
       return result.str();
     }
 
+    std::int64_t epoch_milliseconds()
+    {
+      return std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::system_clock::now().time_since_epoch()).count();
+    }
+
     std::string status_name(Chess::GameState state)
     {
       switch (state)
@@ -282,7 +288,8 @@ namespace Chess::Backend
     {
       ExecutionBudget::checkpoint();
       Statement game_query(database,
-                           "SELECT white_principal, black_principal, initial_fen, version, status, updated_at "
+                           "SELECT white_principal, black_principal, initial_fen, version, status, updated_at, "
+                           "initial_ms, increment_ms, clock_white_ms, clock_black_ms, clock_started_at_ms "
                            "FROM games WHERE game_id = ?1");
       if (!game_query || !bind_text(game_query.get(), 1, game_id))
       {
@@ -314,6 +321,26 @@ namespace Chess::Backend
       }
       const std::uint64_t version = static_cast<std::uint64_t>(sqlite3_column_int64(game_query.get(), 3));
       const std::string persisted_status = column_text(game_query.get(), 4);
+      const auto initial_ms_type = sqlite3_column_type(game_query.get(), 6);
+      const auto white_clock_type = sqlite3_column_type(game_query.get(), 8);
+      const auto black_clock_type = sqlite3_column_type(game_query.get(), 9);
+      const auto started_type = sqlite3_column_type(game_query.get(), 10);
+      const bool timed = initial_ms_type != SQLITE_NULL;
+        const auto persisted_white_clock = timed ? sqlite3_column_int64(game_query.get(), 8) : 0;
+        const auto persisted_black_clock = timed ? sqlite3_column_int64(game_query.get(), 9) : 0;
+        const auto persisted_clock_started = started_type == SQLITE_INTEGER
+          ? sqlite3_column_int64(game_query.get(), 10) : 0;
+      if (timed && (initial_ms_type != SQLITE_INTEGER
+          || sqlite3_column_type(game_query.get(), 7) != SQLITE_INTEGER
+          || white_clock_type != SQLITE_INTEGER || black_clock_type != SQLITE_INTEGER
+          || sqlite3_column_int64(game_query.get(), 6) <= 0
+          || sqlite3_column_int64(game_query.get(), 7) != 0
+          || sqlite3_column_int64(game_query.get(), 8) < 0
+          || sqlite3_column_int64(game_query.get(), 9) < 0
+          || (started_type != SQLITE_NULL && started_type != SQLITE_INTEGER)))
+        return internal_error();
+      if (!timed && (white_clock_type != SQLITE_NULL || black_clock_type != SQLITE_NULL || started_type != SQLITE_NULL))
+        return internal_error();
       const std::array<std::string_view, 11> statuses{
         "ongoing", "checkmate", "stalemate", "draw_insufficient_material", "draw_threefold_repetition",
         "draw_fifty_move_rule", "white_resigned", "black_resigned", "draw_by_agreement", "white_timeout", "black_timeout"};
@@ -444,6 +471,22 @@ namespace Chess::Backend
         snapshot.black_player = Player{"Black"};
       }
       snapshot.server_time = utc_now();
+      if (timed)
+      {
+        auto white_remaining = persisted_white_clock;
+        auto black_remaining = persisted_black_clock;
+        std::optional<std::string> running_color;
+        if (persisted_status == "ongoing" && started_type == SQLITE_INTEGER)
+        {
+          const auto elapsed = (std::max<std::int64_t>)(0, epoch_milliseconds() - persisted_clock_started);
+          auto& remaining = handler.get_current_grid().current_turn == Chess::Color::WHITE
+              ? white_remaining : black_remaining;
+          remaining = (std::max<std::int64_t>)(0, remaining - elapsed);
+          running_color = handler.get_current_grid().current_turn == Chess::Color::WHITE ? "white" : "black";
+        }
+        snapshot.clock = ClockSnapshot{static_cast<std::uint64_t>(white_remaining),
+            static_cast<std::uint64_t>(black_remaining), std::move(running_color), 0};
+      }
       if (snapshot.status == "ongoing")
       {
         for (const auto& move : handler.get_legal_moves())
@@ -465,13 +508,21 @@ namespace Chess::Backend
         ExecutionBudget::checkpoint();
         legal_moves.push_back(Json{{"uci", move.uci}, {"san", move.san}});
       }
+      Json clock = nullptr;
+      if (snapshot.clock)
+      {
+        clock = Json{{"whiteRemainingMs", snapshot.clock->white_remaining_ms},
+                     {"blackRemainingMs", snapshot.clock->black_remaining_ms},
+                     {"runningColor", snapshot.clock->running_color ? Json(*snapshot.clock->running_color) : Json(nullptr)},
+                     {"incrementMs", snapshot.clock->increment_ms}};
+      }
       return Json{{"gameId", snapshot.game_id}, {"version", snapshot.version}, {"fen", snapshot.fen},
                   {"sideToMove", snapshot.side_to_move}, {"status", snapshot.status},
                   {"legalMoves", std::move(legal_moves)}, {"moveCount", snapshot.move_count},
                   {"viewerSeat", snapshot.viewer_seat},
                   {"players", {{"white", {{"displayName", snapshot.white_player.display_name}}},
                                {"black", snapshot.black_player ? Json{{"displayName", snapshot.black_player->display_name}} : Json(nullptr)}}},
-                  {"clock", nullptr}, {"serverTime", snapshot.server_time}};
+                  {"clock", std::move(clock)}, {"serverTime", snapshot.server_time}};
     }
 
     GameSnapshot snapshot_from_json(const Json& value)
@@ -490,6 +541,15 @@ namespace Chess::Backend
         snapshot.black_player = Player{value.at("players").at("black").at("displayName").get<std::string>()};
       }
       snapshot.server_time = value.at("serverTime").get<std::string>();
+      if (!value.at("clock").is_null())
+      {
+        const auto& clock = value.at("clock");
+        std::optional<std::string> running_color;
+        if (!clock.at("runningColor").is_null()) running_color = clock.at("runningColor").get<std::string>();
+        snapshot.clock = ClockSnapshot{clock.at("whiteRemainingMs").get<std::uint64_t>(),
+        clock.at("blackRemainingMs").get<std::uint64_t>(), std::move(running_color),
+        clock.at("incrementMs").get<std::uint64_t>()};
+      }
       for (const auto& move : value.at("legalMoves"))
       {
         ExecutionBudget::checkpoint();
@@ -498,9 +558,11 @@ namespace Chess::Backend
       return snapshot;
     }
 
-    std::string create_fingerprint(const std::string& fen)
+    std::string create_fingerprint(const std::string& fen, const std::optional<TimeControl>& time_control)
     {
-      return std::to_string(fen.size()) + ":" + fen;
+      return std::to_string(fen.size()) + ":" + fen + ":"
+          + (time_control ? std::to_string(time_control->initial_ms) + ":" + std::to_string(time_control->increment_ms)
+                          : "untimed");
     }
 
     enum class Operation { join, move, resign, offer_draw, accept_draw };
@@ -534,7 +596,8 @@ namespace Chess::Backend
       {
         return internal_error();
       }
-      Statement seats(database, "SELECT white_principal, black_principal, draw_offer_by, initial_ms "
+      Statement seats(database, "SELECT white_principal, black_principal, draw_offer_by, initial_ms, "
+                "clock_white_ms, clock_black_ms, clock_started_at_ms "
                                 "FROM games WHERE game_id = ?1");
       if (!seats || !bind_text(seats.get(), 1, game_id))
       {
@@ -553,6 +616,17 @@ namespace Chess::Backend
       std::string black = column_text(seats.get(), 1);
       std::string draw_offer = column_text(seats.get(), 2);
       const bool timed = sqlite3_column_type(seats.get(), 3) != SQLITE_NULL;
+        const auto stored_white_clock = timed ? sqlite3_column_int64(seats.get(), 4) : 0;
+        const auto stored_black_clock = timed ? sqlite3_column_int64(seats.get(), 5) : 0;
+        const auto stored_clock_started = sqlite3_column_type(seats.get(), 6) == SQLITE_INTEGER
+          ? sqlite3_column_int64(seats.get(), 6) : 0;
+        if (timed && (sqlite3_column_type(seats.get(), 3) != SQLITE_INTEGER
+          || sqlite3_column_type(seats.get(), 4) != SQLITE_INTEGER
+          || sqlite3_column_type(seats.get(), 5) != SQLITE_INTEGER
+          || (sqlite3_column_type(seats.get(), 6) != SQLITE_NULL
+            && sqlite3_column_type(seats.get(), 6) != SQLITE_INTEGER)
+          || stored_white_clock < 0 || stored_black_clock < 0))
+        return internal_error();
       if (sqlite3_step(seats.get()) != SQLITE_DONE)
       {
         return internal_error();
@@ -562,10 +636,6 @@ namespace Chess::Backend
       if (!participant && operation != Operation::join)
       {
         return error(404, "game_not_found", "Not Found", "The requested game was not found.");
-      }
-      if (timed)
-      {
-        return error(422, "time_control_unavailable", "Unprocessable Content", "Timed games are not supported.");
       }
       const std::array<const char*, 5> names{"join", "move", "resign", "offer_draw", "accept_draw"};
       const std::string scope = std::string(names[static_cast<std::size_t>(operation)]) + ":" + game_id;
@@ -622,9 +692,33 @@ namespace Chess::Backend
         return *failure;
       }
       const auto& current = std::get<GameSnapshot>(loaded);
+      const auto clock_snapshot_at = epoch_milliseconds();
       if (current.version != expected_version)
       {
         return error(412, "stale_version", "Precondition Failed", "The game version has changed.", current.version);
+      }
+      const auto commit_timeout = [&](const std::string& color) {
+        const std::string timeout_status = color + "_timeout";
+        Statement timeout(database, "UPDATE games SET status=?1,version=version+1,"
+            "clock_white_ms=CASE WHEN ?2='white' THEN 0 ELSE clock_white_ms END,"
+            "clock_black_ms=CASE WHEN ?2='black' THEN 0 ELSE clock_black_ms END,"
+            "clock_started_at_ms=NULL,updated_at=?3 WHERE game_id=?4 AND version=?5");
+        return timeout && bind_text(timeout.get(), 1, timeout_status)
+            && bind_text(timeout.get(), 2, color) && bind_text(timeout.get(), 3, utc_now())
+            && bind_text(timeout.get(), 4, game_id)
+            && sqlite3_bind_int64(timeout.get(), 5, static_cast<sqlite3_int64>(current.version)) == SQLITE_OK
+            && sqlite3_step(timeout.get()) == SQLITE_DONE && sqlite3_changes(database) == 1
+            && transaction.commit();
+      };
+      if (timed && current.clock && current.clock->running_color)
+      {
+        const auto remaining = *current.clock->running_color == "white"
+            ? current.clock->white_remaining_ms : current.clock->black_remaining_ms;
+        if (remaining == 0)
+        {
+          if (!commit_timeout(*current.clock->running_color)) return internal_error();
+          return error(409, "clock_expired", "Conflict", "The active game clock has expired.");
+        }
       }
       if (current.version >= static_cast<std::uint64_t>((std::numeric_limits<sqlite3_int64>::max)()))
       {
@@ -635,6 +729,9 @@ namespace Chess::Backend
         return error(409, "game_finished", "Conflict", "The game is already finished.");
       }
       std::string status = current.status;
+      auto white_clock = timed ? static_cast<std::int64_t>(current.clock->white_remaining_ms) : 0;
+      auto black_clock = timed ? static_cast<std::int64_t>(current.clock->black_remaining_ms) : 0;
+      std::optional<std::int64_t> clock_started;
       const std::string seat = principal.id == white ? "white" : "black";
       if (!draw_offer.empty() && draw_offer != "white" && draw_offer != "black")
       {
@@ -643,6 +740,7 @@ namespace Chess::Backend
       if (operation == Operation::join)
       {
         black = principal.id;
+        if (timed && current.status == "ongoing") clock_started = epoch_milliseconds();
       }
       else if (operation == Operation::move)
       {
@@ -668,6 +766,17 @@ namespace Chess::Backend
           if (translator.move_to_algebraic(move, handler.get_current_grid()) == uci)
           {
             san = translator.move_to_san(move, handler.get_current_grid());
+            if (timed && current.clock && current.clock->running_color)
+            {
+              const auto elapsed = (std::max<std::int64_t>)(0, epoch_milliseconds() - clock_snapshot_at);
+              auto& remaining = *current.clock->running_color == "white" ? white_clock : black_clock;
+              if (elapsed >= remaining)
+              {
+                if (!commit_timeout(*current.clock->running_color)) return internal_error();
+                return error(409, "clock_expired", "Conflict", "The active game clock has expired.");
+              }
+              remaining -= elapsed;
+            }
             applied = handler.make_move(move);
             break;
           }
@@ -686,6 +795,7 @@ namespace Chess::Backend
         }
         status = status_name(handler.get_game_state());
         draw_offer.clear();
+        if (timed && status == "ongoing") clock_started = epoch_milliseconds();
       }
       else if (operation == Operation::resign)
       {
@@ -699,6 +809,12 @@ namespace Chess::Backend
           return error(409, "draw_offer_unavailable", "Conflict", "A draw cannot be offered now.");
         }
         draw_offer = seat;
+        if (timed && current.clock && current.clock->running_color)
+        {
+          white_clock = stored_white_clock;
+          black_clock = stored_black_clock;
+          clock_started = stored_clock_started;
+        }
       }
       else
       {
@@ -709,13 +825,20 @@ namespace Chess::Backend
         status = "draw_by_agreement";
         draw_offer.clear();
       }
-      Statement update(database, "UPDATE games SET black_principal = ?1, status = ?2, draw_offer_by = ?3, "
-                                 "version = version + 1, updated_at = ?4 WHERE game_id = ?5 AND version = ?6");
+        Statement update(database, "UPDATE games SET black_principal=?1,status=?2,draw_offer_by=?3,"
+          "clock_white_ms=?4,clock_black_ms=?5,clock_started_at_ms=?6,"
+          "version=version+1,updated_at=?7 WHERE game_id=?8 AND version=?9");
       if (!update || (black.empty() ? sqlite3_bind_null(update.get(), 1) != SQLITE_OK : !bind_text(update.get(), 1, black))
           || !bind_text(update.get(), 2, status)
           || (draw_offer.empty() ? sqlite3_bind_null(update.get(), 3) != SQLITE_OK : !bind_text(update.get(), 3, draw_offer))
-          || !bind_text(update.get(), 4, utc_now()) || !bind_text(update.get(), 5, game_id)
-          || sqlite3_bind_int64(update.get(), 6, static_cast<sqlite3_int64>(expected_version)) != SQLITE_OK
+          || (timed ? sqlite3_bind_int64(update.get(), 4, white_clock) != SQLITE_OK
+              : sqlite3_bind_null(update.get(), 4) != SQLITE_OK)
+          || (timed ? sqlite3_bind_int64(update.get(), 5, black_clock) != SQLITE_OK
+              : sqlite3_bind_null(update.get(), 5) != SQLITE_OK)
+          || (clock_started ? sqlite3_bind_int64(update.get(), 6, *clock_started) != SQLITE_OK
+                  : sqlite3_bind_null(update.get(), 6) != SQLITE_OK)
+          || !bind_text(update.get(), 7, utc_now()) || !bind_text(update.get(), 8, game_id)
+          || sqlite3_bind_int64(update.get(), 9, static_cast<sqlite3_int64>(expected_version)) != SQLITE_OK
           || sqlite3_step(update.get()) != SQLITE_DONE || sqlite3_changes(database) != 1)
       {
         return internal_error();
@@ -812,6 +935,110 @@ namespace Chess::Backend
     return maintenance_deleted_records_.load(std::memory_order_relaxed);
   }
 
+  bool SqliteGameApplication::expire_timed_games(std::size_t maximum_games, std::size_t& expired) noexcept
+  {
+    expired = 0;
+    try
+    {
+      if (maximum_games == 0 || maximum_games > 256 || !database_.is_ready()) return false;
+      std::lock_guard<std::mutex> lock(database_.mutex());
+      sqlite3* database = database_.handle();
+      Transaction transaction(database);
+      if (!transaction) return false;
+      struct ActiveClock
+      {
+          std::string game_id;
+          std::int64_t white_ms;
+          std::int64_t black_ms;
+          std::int64_t started_at_ms;
+          std::int64_t version;
+          std::uint64_t plies;
+          bool initial_white_to_move;
+      };
+      std::vector<ActiveClock> active_games;
+      {
+        Statement query(database, "SELECT g.game_id,g.initial_fen,g.clock_white_ms,g.clock_black_ms,"
+            "g.clock_started_at_ms,g.version,COUNT(m.ply) FROM games g "
+            "LEFT JOIN game_moves m ON m.game_id=g.game_id "
+            "WHERE g.status='ongoing' AND g.clock_started_at_ms IS NOT NULL "
+            "GROUP BY g.game_id ORDER BY g.clock_started_at_ms LIMIT ?1");
+        if (!query || sqlite3_bind_int64(query.get(), 1, static_cast<sqlite3_int64>(maximum_games)) != SQLITE_OK)
+          return false;
+        int step = SQLITE_OK;
+        while ((step = sqlite3_step(query.get())) == SQLITE_ROW)
+        {
+          if (sqlite3_column_type(query.get(), 0) != SQLITE_TEXT
+              || sqlite3_column_type(query.get(), 1) != SQLITE_TEXT
+              || sqlite3_column_type(query.get(), 2) != SQLITE_INTEGER
+              || sqlite3_column_type(query.get(), 3) != SQLITE_INTEGER
+              || sqlite3_column_type(query.get(), 4) != SQLITE_INTEGER
+              || sqlite3_column_type(query.get(), 5) != SQLITE_INTEGER
+              || sqlite3_column_type(query.get(), 6) != SQLITE_INTEGER) return false;
+          std::istringstream fen(column_text(query.get(), 1));
+          std::string placement;
+          std::string active_side;
+          if (!(fen >> placement >> active_side) || (active_side != "w" && active_side != "b")) return false;
+          const auto plies = sqlite3_column_int64(query.get(), 6);
+          if (plies < 0 || plies > static_cast<sqlite3_int64>(maximum_plies)) return false;
+          active_games.push_back(ActiveClock{column_text(query.get(), 0),
+              sqlite3_column_int64(query.get(), 2), sqlite3_column_int64(query.get(), 3),
+              sqlite3_column_int64(query.get(), 4), sqlite3_column_int64(query.get(), 5),
+              static_cast<std::uint64_t>(plies), active_side == "w"});
+        }
+        if (step != SQLITE_DONE) return false;
+      }
+      const auto now = epoch_milliseconds();
+      for (const auto& game : active_games)
+      {
+        const bool white_to_move = (game.plies % 2 == 0)
+            ? game.initial_white_to_move : !game.initial_white_to_move;
+        const auto remaining = white_to_move ? game.white_ms : game.black_ms;
+        if (remaining <= 0 || now - game.started_at_ms < remaining) continue;
+        const std::string side = white_to_move ? "white" : "black";
+        const std::string status = side + "_timeout";
+        Statement update(database, "UPDATE games SET status=?1,version=version+1,"
+            "clock_white_ms=CASE WHEN ?2='white' THEN 0 ELSE clock_white_ms END,"
+            "clock_black_ms=CASE WHEN ?2='black' THEN 0 ELSE clock_black_ms END,"
+            "clock_started_at_ms=NULL,updated_at=?3 WHERE game_id=?4 AND version=?5 "
+            "AND status='ongoing' AND clock_started_at_ms=?6");
+        if (!update || !bind_text(update.get(), 1, status) || !bind_text(update.get(), 2, side)
+            || !bind_text(update.get(), 3, utc_now()) || !bind_text(update.get(), 4, game.game_id)
+            || sqlite3_bind_int64(update.get(), 5, game.version) != SQLITE_OK
+            || sqlite3_bind_int64(update.get(), 6, game.started_at_ms) != SQLITE_OK
+            || sqlite3_step(update.get()) != SQLITE_DONE) return false;
+        if (sqlite3_changes(database) == 1) ++expired;
+      }
+      return transaction.commit();
+    }
+    catch (...) { return false; }
+  }
+
+  bool SqliteGameApplication::anonymize_principal(const Principal& principal) noexcept
+  {
+    try
+    {
+      if (principal.id.empty() || principal.id.size() > 128 || !database_.is_ready()) return false;
+      const auto generated = random_game_id();
+      if (!generated) return false;
+      const Principal tombstone{"deleted-" + *generated};
+      std::lock_guard<std::mutex> lock(database_.mutex());
+      sqlite3* database = database_.handle();
+      Transaction transaction(database);
+      if (!transaction) return false;
+      Statement games(database, "UPDATE games SET "
+          "white_principal=CASE WHEN white_principal=?1 THEN ?2 ELSE white_principal END, "
+          "black_principal=CASE WHEN black_principal=?1 THEN ?2 ELSE black_principal END "
+          "WHERE white_principal=?1 OR black_principal=?1");
+      if (!games || !bind_text(games.get(), 1, principal.id) || !bind_text(games.get(), 2, tombstone.id)
+          || sqlite3_step(games.get()) != SQLITE_DONE) return false;
+      Statement retries(database, "DELETE FROM idempotency_records WHERE principal_id=?1");
+      if (!retries || !bind_text(retries.get(), 1, principal.id) || sqlite3_step(retries.get()) != SQLITE_DONE)
+        return false;
+      return transaction.commit();
+    }
+    catch (...) { return false; }
+  }
+
   Result<GameSnapshot> SqliteGameApplication::create_game(const Principal& principal, const CreateGameCommand& command,
                                                            const std::string& idempotency_key)
   {
@@ -824,9 +1051,11 @@ namespace Chess::Backend
     {
       return error(400, "invalid_request", "Bad Request", "The request could not be completed.");
     }
-    if (command.time_control.has_value())
+    if (command.time_control.has_value()
+        && (command.time_control->initial_ms == 0 || command.time_control->initial_ms > 86400000
+            || command.time_control->increment_ms != 0))
     {
-      return error(422, "time_control_unavailable", "Unprocessable Content", "Timed games are not available yet.");
+      return error(422, "invalid_time_control", "Unprocessable Content", "Only simple initial-time clocks are supported.");
     }
 
     const std::string fen = command.initial_fen.value_or("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
@@ -871,7 +1100,7 @@ namespace Chess::Backend
       return internal_error();
     }
 
-    const std::string fingerprint = create_fingerprint(fen);
+    const std::string fingerprint = create_fingerprint(fen, command.time_control);
     Statement prior(database,
                     "SELECT request_fingerprint, response_json FROM idempotency_records "
                     "WHERE principal_id = ?1 AND operation = 'create_game' AND idempotency_key = ?2 "
@@ -937,11 +1166,19 @@ namespace Chess::Backend
       return internal_error();
     }
     Statement insert(database,
-                     "INSERT INTO games(game_id, white_principal, initial_fen, version, status, created_at, updated_at) "
-                     "VALUES(?4, ?1, ?2, 1, ?5, ?3, ?3) RETURNING game_id");
-    if (!insert || !bind_text(insert.get(), 1, principal.id) || !bind_text(insert.get(), 2, fen)
-        || !bind_text(insert.get(), 3, utc_now()) || !bind_text(insert.get(), 4, *generated_id)
-        || !bind_text(insert.get(), 5, initial_status(handler.get_current_grid()))
+             "INSERT INTO games(game_id,white_principal,initial_fen,initial_ms,increment_ms,"
+             "clock_white_ms,clock_black_ms,version,status,created_at,updated_at) "
+             "VALUES(?1,?2,?3,?4,0,?5,?5,1,?6,?7,?7) RETURNING game_id");
+    if (!insert || !bind_text(insert.get(), 1, *generated_id) || !bind_text(insert.get(), 2, principal.id)
+      || !bind_text(insert.get(), 3, fen)
+      || (command.time_control
+        ? sqlite3_bind_int64(insert.get(), 4, static_cast<sqlite3_int64>(command.time_control->initial_ms)) != SQLITE_OK
+        : sqlite3_bind_null(insert.get(), 4) != SQLITE_OK)
+      || (command.time_control
+        ? sqlite3_bind_int64(insert.get(), 5, static_cast<sqlite3_int64>(command.time_control->initial_ms)) != SQLITE_OK
+        : sqlite3_bind_null(insert.get(), 5) != SQLITE_OK)
+      || !bind_text(insert.get(), 6, initial_status(handler.get_current_grid()))
+      || !bind_text(insert.get(), 7, utc_now())
         || sqlite3_step(insert.get()) != SQLITE_ROW)
     {
       return internal_error();

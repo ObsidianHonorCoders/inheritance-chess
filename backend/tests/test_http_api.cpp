@@ -429,10 +429,20 @@ namespace
   TEST_F(HttpApiTest, ValidNestedTimeControlIsAccepted)
   {
     const auto response = client_->Post("/api/v1/games", authenticated_headers(),
-                                        R"({"timeControl":{"initialMs":60000,"incrementMs":1000}})", "application/json");
+                                        R"({"timeControl":{"initialMs":60000,"incrementMs":0}})", "application/json");
     ASSERT_TRUE(response);
     EXPECT_EQ(response->status, 201);
     EXPECT_EQ(application_.create_calls, 1);
+  }
+
+  TEST_F(HttpApiTest, IncrementTimeControlIsRejectedUntilSupported)
+  {
+    const auto response = client_->Post("/api/v1/games", authenticated_headers(),
+        R"({"timeControl":{"initialMs":60000,"incrementMs":1000}})", "application/json");
+    ASSERT_TRUE(response);
+    EXPECT_EQ(response->status, 422);
+    EXPECT_EQ(Json::parse(response->body).at("code"), "invalid_time_control");
+    EXPECT_EQ(application_.create_calls, 0);
   }
 
   class HttpApiHistoryLimitTest : public HttpApiTest, public ::testing::WithParamInterface<std::size_t>
@@ -569,7 +579,7 @@ namespace
     std::filesystem::remove(path.string() + "-shm", cleanup_error);
   }
 
-  TEST(SqliteGameApplicationTest, RejectsInvalidAndTimedGameRequestsUntilSupported)
+  TEST(SqliteGameApplicationTest, SupportsSimpleTimedGamesAndRejectsIncrementClocks)
   {
     const auto path = std::filesystem::temp_directory_path()
                       / ("ichess-game-input-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".db");
@@ -585,10 +595,18 @@ namespace
       EXPECT_EQ(std::get<ApplicationError>(invalid_result).status, 422);
 
       CreateGameCommand timed;
-      timed.time_control = TimeControl{};
+      timed.time_control = TimeControl{60000, 0};
       const auto timed_result = application.create_game(Principal{"owner"}, timed, "fedcba9876543210");
-      ASSERT_TRUE(std::holds_alternative<ApplicationError>(timed_result));
-      EXPECT_EQ(std::get<ApplicationError>(timed_result).status, 422);
+      ASSERT_TRUE(std::holds_alternative<GameSnapshot>(timed_result));
+      ASSERT_TRUE(std::get<GameSnapshot>(timed_result).clock);
+      EXPECT_EQ(std::get<GameSnapshot>(timed_result).clock->white_remaining_ms, 60000U);
+      EXPECT_FALSE(std::get<GameSnapshot>(timed_result).clock->running_color);
+
+      CreateGameCommand incremented;
+      incremented.time_control = TimeControl{60000, 1000};
+      const auto incremented_result = application.create_game(Principal{"owner"}, incremented, "fedcba9876543211");
+      ASSERT_TRUE(std::holds_alternative<ApplicationError>(incremented_result));
+      EXPECT_EQ(std::get<ApplicationError>(incremented_result).status, 422);
     }
     std::error_code cleanup_error;
     std::filesystem::remove(path, cleanup_error);
@@ -699,7 +717,7 @@ namespace
     {
       SqliteDatabase database(path_.string());
       ASSERT_TRUE(database.is_ready());
-      ASSERT_EQ(sqlite3_exec(database.handle(), "UPDATE schema_version SET version = 2; DROP TABLE game_moves;",
+      ASSERT_EQ(sqlite3_exec(database.handle(), "UPDATE schema_version SET version = 3; DROP TABLE game_moves;",
                             nullptr, nullptr, nullptr), SQLITE_OK);
     }
     SqliteDatabase reopened(path_.string());
@@ -965,4 +983,69 @@ namespace
     std::filesystem::remove(account_path.string() + "-wal", cleanup_error);
     std::filesystem::remove(account_path.string() + "-shm", cleanup_error);
     }
+
+  TEST(LocalAuthApiTest, AccountDeletionAnonymizesGamesAndRevokesSessions)
+  {
+    const auto account_path = std::filesystem::temp_directory_path()
+        / ("ichess-auth-delete-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".sqlite");
+    {
+      SqliteLocalAccountStore accounts(account_path.string());
+      SessionAuthenticator authenticator({"https://chess.example.test"});
+      SqliteDatabase game_database(":memory:");
+      SqliteGameApplication application(game_database);
+      ASSERT_EQ(accounts.create_account("delete-player", "account deletion password"), AccountCreateResult::Created);
+      ASSERT_EQ(accounts.create_account("keep-player", "another deletion password"), AccountCreateResult::Created);
+      const auto created = application.create_game(Principal{"delete-player"}, {}, "delete-game-key-00001");
+      ASSERT_TRUE(std::holds_alternative<GameSnapshot>(created));
+      const auto game = std::get<GameSnapshot>(created);
+      const auto joined = application.join_game(Principal{"keep-player"}, game.game_id, game.version,
+                                                  "delete-join-key-000001");
+      ASSERT_TRUE(std::holds_alternative<GameSnapshot>(joined));
+      auto deletion_session = authenticator.create_session(Principal{"delete-player"});
+      ASSERT_TRUE(deletion_session);
+      auto retained_session = authenticator.create_session(Principal{"keep-player"});
+      ASSERT_TRUE(retained_session);
+      httplib::Server server;
+      register_http_api(server, authenticator, application, {}, {}, &accounts, &authenticator);
+      const int port = server.bind_to_any_port("127.0.0.1");
+      ASSERT_GT(port, 0);
+      std::thread server_thread([&] { server.listen_after_bind(); });
+      server.wait_until_ready();
+      httplib::Client client("127.0.0.1", port);
+      client.set_read_timeout(10);
+      const httplib::Headers deletion_headers{{"Cookie", "__Host-ichess_session=" + deletion_session->token},
+          {"Origin", "https://chess.example.test"}, {"X-CSRF-Token", deletion_session->csrf_token}};
+      const auto deleted = client.Post("/api/v1/auth/delete", deletion_headers,
+          R"({"currentPassword":"account deletion password"})", "application/json");
+      ASSERT_TRUE(deleted);
+      EXPECT_EQ(deleted->status, 200);
+      EXPECT_EQ(Json::parse(deleted->body).at("status"), "deleted");
+      EXPECT_NE(deleted->get_header_value("Set-Cookie").find("Max-Age=0"), std::string::npos);
+      EXPECT_FALSE(accounts.authenticate("delete-player", "account deletion password"));
+      EXPECT_FALSE(authenticator.create_session(Principal{"delete-player"}));
+      httplib::Request old_session_request;
+      old_session_request.set_header("Cookie", "__Host-ichess_session=" + deletion_session->token);
+      EXPECT_FALSE(authenticator.principal_for(old_session_request));
+
+      const auto retained = application.get_game(Principal{"keep-player"}, game.game_id);
+      ASSERT_TRUE(std::holds_alternative<GameSnapshot>(retained));
+      EXPECT_EQ(std::get<GameSnapshot>(retained).move_count, 0U);
+      sqlite3_stmt* statement = nullptr;
+      ASSERT_EQ(sqlite3_prepare_v2(game_database.handle(),
+          "SELECT white_principal FROM games WHERE game_id=?1", -1, &statement, nullptr), SQLITE_OK);
+      ASSERT_EQ(sqlite3_bind_text(statement, 1, game.game_id.c_str(), -1, SQLITE_TRANSIENT), SQLITE_OK);
+      ASSERT_EQ(sqlite3_step(statement), SQLITE_ROW);
+      const auto* anonymized = reinterpret_cast<const char*>(sqlite3_column_text(statement, 0));
+      ASSERT_NE(anonymized, nullptr);
+      EXPECT_NE(std::string(anonymized).find("deleted-"), std::string::npos);
+      sqlite3_finalize(statement);
+
+      server.stop();
+      server_thread.join();
+    }
+    std::error_code cleanup_error;
+    std::filesystem::remove(account_path, cleanup_error);
+    std::filesystem::remove(account_path.string() + "-wal", cleanup_error);
+    std::filesystem::remove(account_path.string() + "-shm", cleanup_error);
+  }
 } // namespace

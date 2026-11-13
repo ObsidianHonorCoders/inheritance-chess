@@ -106,6 +106,36 @@ namespace
       std::atomic<bool> stop_{false};
       std::thread thread_;
   };
+
+  class TimedGameExpiryWorker
+  {
+    public:
+      explicit TimedGameExpiryWorker(Chess::Backend::SqliteGameApplication& application)
+        : thread_([this, &application] {
+          while (!stop_.load(std::memory_order_acquire))
+          {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (stop_.load(std::memory_order_acquire)) break;
+            std::size_t expired = 0;
+            if (!application.expire_timed_games(64, expired))
+              std::clog << "{\"event\":\"timed_game_expiry_failed\"}\n";
+          }
+        })
+      {}
+
+      ~TimedGameExpiryWorker()
+      {
+        stop_.store(true, std::memory_order_release);
+        if (thread_.joinable()) thread_.join();
+      }
+
+      TimedGameExpiryWorker(const TimedGameExpiryWorker&) = delete;
+      TimedGameExpiryWorker& operator=(const TimedGameExpiryWorker&) = delete;
+
+    private:
+      std::atomic<bool> stop_{false};
+      std::thread thread_;
+  };
 }
 
 int main()
@@ -160,6 +190,7 @@ int main()
     SignalHandlers signals;
     ShutdownMonitor monitor(server, shutdown_requested);
     IdempotencyMaintenanceWorker maintenance(application);
+    TimedGameExpiryWorker timed_expiry(application);
     return server.listen_after_bind() ? EXIT_SUCCESS : EXIT_FAILURE;
   }
   catch (...)

@@ -195,6 +195,9 @@ namespace Chess::Backend
     if (!valid_principal(principal.id)) return std::nullopt;
     std::lock_guard<std::mutex> lock(mutex_);
     prune_locked();
+    if (std::any_of(blocked_principals_.begin(), blocked_principals_.end(), [&](const Principal& blocked) {
+          return blocked.id == principal.id;
+        })) return std::nullopt;
     if (sessions_.size() >= config_.max_sessions) return std::nullopt;
     auto token = random_token();
     if (find_locked(token) != nullptr || revoked(token)) return std::nullopt;
@@ -235,6 +238,28 @@ namespace Chess::Backend
     return true;
   }
 
+  bool SessionAuthenticator::block_principal(const Principal& principal)
+  {
+    if (!valid_principal(principal.id)) return false;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (std::any_of(blocked_principals_.begin(), blocked_principals_.end(), [&](const Principal& blocked) {
+          return blocked.id == principal.id;
+        })) return true;
+    blocked_principals_.push_back(principal);
+    return true;
+  }
+
+  void SessionAuthenticator::unblock_principal(const Principal& principal) noexcept
+  {
+    try
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      blocked_principals_.erase(std::remove_if(blocked_principals_.begin(), blocked_principals_.end(),
+          [&](const Principal& blocked) { return blocked.id == principal.id; }), blocked_principals_.end());
+    }
+    catch (...) {}
+  }
+
   bool SessionAuthenticator::accepts_login_origin(const httplib::Request& request) const
   {
     return request.get_header_value_count("Origin") == 1
@@ -247,6 +272,9 @@ namespace Chess::Backend
     if (!valid_principal(principal.id) || !valid_token(token)) return false;
     std::lock_guard<std::mutex> lock(mutex_);
     prune_locked();
+    if (std::any_of(blocked_principals_.begin(), blocked_principals_.end(), [&](const Principal& blocked) {
+          return blocked.id == principal.id;
+        })) return false;
     const auto now = epoch(wall_clock_());
     if (expires <= now || expires > now + 86400 || sessions_.size() >= config_.max_sessions
       || find_locked(token) != nullptr || revoked(token)) return false;

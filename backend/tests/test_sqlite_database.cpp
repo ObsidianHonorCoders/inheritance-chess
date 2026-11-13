@@ -96,7 +96,7 @@ namespace
 
       void seed_valid()
       {
-        seed(schema_ + "INSERT INTO schema_version VALUES(1);");
+        seed(schema_ + "INSERT INTO schema_version VALUES(2);");
       }
 
       void expect_rejected_unchanged()
@@ -205,12 +205,12 @@ namespace
     expect_rejected_unchanged();
   }
 
-  TEST_F(SqliteDatabaseTest, VersionMustBeExactlyOneRowWithIntegerOne)
+  TEST_F(SqliteDatabaseTest, VersionMustBeExactlyOneRowWithCurrentVersionTwo)
   {
     for (const char* version_sql : {"DELETE FROM schema_version;",
-                                   "UPDATE schema_version SET version=2;",
+                                   "UPDATE schema_version SET version=1;",
                                    "UPDATE schema_version SET version=4294967297;",
-                                   "INSERT INTO schema_version VALUES(2);"})
+                                   "INSERT INTO schema_version VALUES(3);"})
     {
       seed("DROP TABLE IF EXISTS game_moves; DROP TABLE IF EXISTS games; "
            "DROP TABLE IF EXISTS idempotency_records; DROP TABLE IF EXISTS schema_version;");
@@ -224,16 +224,34 @@ namespace
   {
     SqliteDatabase database(":memory:");
     ASSERT_TRUE(database.is_ready());
-    ASSERT_EQ(sqlite3_exec(database.handle(), "UPDATE schema_version SET version=2", nullptr, nullptr, nullptr), SQLITE_OK);
+    ASSERT_EQ(sqlite3_exec(database.handle(), "UPDATE schema_version SET version=3", nullptr, nullptr, nullptr), SQLITE_OK);
     EXPECT_FALSE(database.is_ready());
-    ASSERT_EQ(sqlite3_exec(database.handle(), "UPDATE schema_version SET version=1", nullptr, nullptr, nullptr), SQLITE_OK);
+    ASSERT_EQ(sqlite3_exec(database.handle(), "UPDATE schema_version SET version=2", nullptr, nullptr, nullptr), SQLITE_OK);
     EXPECT_TRUE(database.is_ready());
     ASSERT_EQ(sqlite3_exec(database.handle(), "DELETE FROM schema_version", nullptr, nullptr, nullptr), SQLITE_OK);
     EXPECT_FALSE(database.is_ready());
-    ASSERT_EQ(sqlite3_exec(database.handle(), "INSERT INTO schema_version VALUES(1)", nullptr, nullptr, nullptr), SQLITE_OK);
-    EXPECT_TRUE(database.is_ready());
     ASSERT_EQ(sqlite3_exec(database.handle(), "INSERT INTO schema_version VALUES(2)", nullptr, nullptr, nullptr), SQLITE_OK);
+    EXPECT_TRUE(database.is_ready());
+    ASSERT_EQ(sqlite3_exec(database.handle(), "INSERT INTO schema_version VALUES(3)", nullptr, nullptr, nullptr), SQLITE_OK);
     EXPECT_FALSE(database.is_ready());
+  }
+
+  TEST_F(SqliteDatabaseTest, VersionOneDatabaseMigratesToClockSchemaVersionTwo)
+  {
+    auto legacy = schema_;
+    const std::string clock_columns = ",\n        clock_white_ms INTEGER,\n        clock_black_ms INTEGER,\n        clock_started_at_ms INTEGER";
+    const auto columns_position = legacy.find(clock_columns);
+    ASSERT_NE(columns_position, std::string::npos);
+    legacy.erase(columns_position, clock_columns.size());
+    seed(legacy + "INSERT INTO schema_version VALUES(1);");
+    seed("INSERT INTO games(game_id,white_principal,initial_fen,initial_ms,created_at,updated_at) "
+         "VALUES('legacy-game','white','fen',60000,'created','updated');");
+    SqliteDatabase migrated(path_.string());
+    ASSERT_TRUE(migrated.is_ready());
+    EXPECT_EQ(scalar(migrated.handle(), "SELECT version FROM schema_version"), 2);
+    EXPECT_EQ(scalar(migrated.handle(), "SELECT clock_white_ms FROM games WHERE game_id='legacy-game'"), 60000);
+    EXPECT_EQ(scalar(migrated.handle(), "SELECT clock_black_ms FROM games WHERE game_id='legacy-game'"), 60000);
+    EXPECT_EQ(scalar(migrated.handle(), "SELECT clock_started_at_ms IS NULL FROM games WHERE game_id='legacy-game'"), 1);
   }
 
   TEST_F(SqliteDatabaseTest, ReadinessRejectsLiveSchemaChanges)
@@ -297,7 +315,7 @@ namespace
     lock.unlock();
     EXPECT_TRUE(readiness.get());
     std::lock_guard<std::mutex> application_lock(database.mutex());
-    EXPECT_EQ(scalar(database.handle(), "SELECT version FROM schema_version"), 1);
+    EXPECT_EQ(scalar(database.handle(), "SELECT version FROM schema_version"), 2);
   }
 
   TEST_F(SqliteDatabaseTest, OpenFailureIsNotReady)

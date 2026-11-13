@@ -13,6 +13,7 @@ namespace Chess::Backend
       virtual ~IGameApplication() = default;
 
       virtual bool is_ready() const = 0;
+      virtual bool anonymize_principal(const Principal&) noexcept { return false; }
       virtual Result<GameSnapshot> create_game(const Principal& principal,
                                                const CreateGameCommand& command,
                                                const std::string& idempotency_key) = 0;

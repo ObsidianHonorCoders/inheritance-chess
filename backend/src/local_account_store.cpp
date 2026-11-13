@@ -429,4 +429,71 @@ namespace Chess::Backend
     }
     catch (...) { return PasswordChangeResult::Unavailable; }
   }
+
+  AccountDeleteResult SqliteLocalAccountStore::delete_account(
+      std::string_view username, std::string_view current_password) noexcept
+  {
+    std::array<unsigned char, salt_bytes> salt{};
+    std::array<unsigned char, hash_bytes> expected{};
+    std::array<unsigned char, hash_bytes> actual{};
+    struct ClearOnExit
+    {
+        std::array<unsigned char, salt_bytes>& salt;
+        std::array<unsigned char, hash_bytes>& expected;
+        std::array<unsigned char, hash_bytes>& actual;
+        ~ClearOnExit()
+        {
+          secure_clear(salt.data(), salt.size());
+          secure_clear(expected.data(), expected.size());
+          secure_clear(actual.data(), actual.size());
+        }
+    } clear{salt, expected, actual};
+
+    try
+    {
+      const auto normalized = normalize_username(username);
+      if (!normalized || !valid_password(current_password) || !is_ready()) return AccountDeleteResult::Unavailable;
+      std::lock_guard<std::mutex> lock(state_->mutex);
+      if (!execute(state_->database, "BEGIN IMMEDIATE")) return AccountDeleteResult::Unavailable;
+      sqlite3_stmt* lookup = nullptr;
+      const bool prepared = sqlite3_prepare_v2(state_->database,
+          "SELECT salt,password_hash,hash_version FROM accounts WHERE username=?1", -1, &lookup, nullptr) == SQLITE_OK;
+      if (!prepared || sqlite3_bind_text(lookup, 1, normalized->c_str(),
+              static_cast<int>(normalized->size()), SQLITE_TRANSIENT) != SQLITE_OK
+          || sqlite3_step(lookup) != SQLITE_ROW
+          || sqlite3_column_type(lookup, 0) != SQLITE_BLOB || sqlite3_column_bytes(lookup, 0) != salt_bytes
+          || sqlite3_column_type(lookup, 1) != SQLITE_BLOB || sqlite3_column_bytes(lookup, 1) != hash_bytes
+          || sqlite3_column_type(lookup, 2) != SQLITE_INTEGER
+          || sqlite3_column_int(lookup, 2) != current_hash_version)
+      {
+        sqlite3_finalize(lookup);
+        execute(state_->database, "ROLLBACK");
+        return AccountDeleteResult::Unavailable;
+      }
+      std::copy_n(static_cast<const unsigned char*>(sqlite3_column_blob(lookup, 0)), salt.size(), salt.begin());
+      std::copy_n(static_cast<const unsigned char*>(sqlite3_column_blob(lookup, 1)), expected.size(), expected.begin());
+      sqlite3_finalize(lookup);
+      if (!derive_password(current_password, salt.data(), actual.data())
+          || !constant_time_equal(actual.data(), expected.data(), actual.size()))
+      {
+        execute(state_->database, "ROLLBACK");
+        return AccountDeleteResult::InvalidPassword;
+      }
+      sqlite3_stmt* remove = nullptr;
+      const bool delete_prepared = sqlite3_prepare_v2(state_->database,
+          "DELETE FROM accounts WHERE username=?1", -1, &remove, nullptr) == SQLITE_OK;
+      const bool delete_bound = delete_prepared
+          && sqlite3_bind_text(remove, 1, normalized->c_str(), static_cast<int>(normalized->size()), SQLITE_TRANSIENT) == SQLITE_OK;
+      const int deleted = delete_bound ? sqlite3_step(remove) : SQLITE_ERROR;
+      sqlite3_finalize(remove);
+      if (deleted != SQLITE_DONE || sqlite3_changes(state_->database) != 1
+          || !execute(state_->database, "COMMIT"))
+      {
+        execute(state_->database, "ROLLBACK");
+        return AccountDeleteResult::Unavailable;
+      }
+      return AccountDeleteResult::Deleted;
+    }
+    catch (...) { return AccountDeleteResult::Unavailable; }
+  }
 }

@@ -176,6 +176,53 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+  /api/v1/auth/delete:
+    post:
+      operationId: deleteLocalAccount
+      summary: Delete the authenticated account
+      description: Requires the current password and session CSRF token. Sessions are revoked, retained games are anonymized, and account idempotency records are removed.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [currentPassword]
+              properties:
+                currentPassword:
+                  type: string
+                  minLength: 12
+                  maxLength: 1024
+                  format: password
+      responses:
+        '200':
+          description: Account deleted and retained games anonymized.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [deleted]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: A required database is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /api/v1/games:
     post:
       operationId: createGame
@@ -665,18 +712,19 @@ components:
         timeControl:
           $ref: '#/components/schemas/TimeControl'
     TimeControl:
+      description: Simple initial-time-only clock. The clock starts when Black joins. Increment clocks are unsupported.
       type: object
       additionalProperties: false
       required: [initialMs]
       properties:
         initialMs:
           type: integer
-          minimum: 0
+          minimum: 1
           maximum: 86400000
         incrementMs:
           type: integer
           minimum: 0
-          maximum: 3600000
+          maximum: 0
           default: 0
     SubmitMoveRequest:
       type: object

@@ -11,6 +11,7 @@ namespace Chess::Backend
 {
   enum class AccountCreateResult { Created, AlreadyExists, Unavailable };
   enum class PasswordChangeResult { Changed, InvalidCurrentPassword, Unavailable };
+  enum class AccountDeleteResult { Deleted, InvalidPassword, Unavailable };
 
   class ILocalAccountStore
   {
@@ -23,6 +24,8 @@ namespace Chess::Backend
                                                     std::string_view password) noexcept = 0;
         virtual PasswordChangeResult change_password(std::string_view username,
           std::string_view current_password, std::string_view new_password) noexcept = 0;
+          virtual AccountDeleteResult delete_account(std::string_view username,
+            std::string_view current_password) noexcept = 0;
   };
 
   class SqliteLocalAccountStore final : public ILocalAccountStore
@@ -42,6 +45,8 @@ namespace Chess::Backend
                                             std::string_view password) noexcept override;
         PasswordChangeResult change_password(std::string_view username,
           std::string_view current_password, std::string_view new_password) noexcept override;
+          AccountDeleteResult delete_account(std::string_view username,
+            std::string_view current_password) noexcept override;
 
     private:
       struct State;

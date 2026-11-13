@@ -726,6 +726,64 @@ namespace Chess::Backend
         }
         complete_login(sessions->issue_session(principal), response, 200);
       });
+      server.Post("/api/v1/auth/delete", [&authenticator, accounts, sessions, &application](
+          const httplib::Request& request, httplib::Response& response) {
+        Principal principal;
+        if (!authenticate(request, authenticator, true, response, principal)) return;
+        Json body;
+        if (!parse_json_body(request, response, body, false)) return;
+        if (!has_only_fields(body, {"currentPassword"}) || body.size() != 1
+            || !body["currentPassword"].is_string())
+        {
+          write_problem(response, 400, "invalid_account_deletion", "Bad Request",
+                        "The current password is required.");
+          return;
+        }
+        std::string password = body["currentPassword"].get<std::string>();
+        PasswordWiper wipe_password(password);
+        if (!accounts->authenticate(principal.id, password))
+        {
+          if (!accounts->is_ready())
+            write_problem(response, 503, "account_service_unavailable", "Service Unavailable",
+                          "Account deletion is temporarily unavailable.");
+          else
+            write_problem(response, 401, "invalid_credentials", "Unauthorized", "The current password is incorrect.");
+          return;
+        }
+        if (!sessions->block_principal(principal))
+        {
+          write_problem(response, 503, "session_revocation_failed", "Service Unavailable",
+                        "Account deletion is temporarily unavailable.");
+          return;
+        }
+        if (!sessions->revoke_principal_sessions(principal))
+        {
+          sessions->unblock_principal(principal);
+          write_problem(response, 503, "session_revocation_failed", "Service Unavailable",
+                        "Account deletion is temporarily unavailable.");
+          return;
+        }
+        if (!application.anonymize_principal(principal))
+        {
+          sessions->unblock_principal(principal);
+          write_problem(response, 503, "game_storage_unavailable", "Service Unavailable",
+                        "Account deletion is temporarily unavailable.");
+          return;
+        }
+        const auto deleted = accounts->delete_account(principal.id, password);
+        if (deleted != AccountDeleteResult::Deleted)
+        {
+          sessions->unblock_principal(principal);
+          if (deleted == AccountDeleteResult::InvalidPassword)
+            write_problem(response, 401, "invalid_credentials", "Unauthorized", "The current password is incorrect.");
+          else
+            write_problem(response, 503, "account_service_unavailable", "Service Unavailable",
+                          "Account deletion is temporarily unavailable.");
+          return;
+        }
+        response.set_header("Set-Cookie", "__Host-ichess_session=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0");
+        write_json(response, 200, Json{{"status", "deleted"}});
+      });
       server.Post("/api/v1/auth/logout", [&authenticator, sessions](
           const httplib::Request& request, httplib::Response& response) {
         Principal principal;
@@ -804,6 +862,12 @@ namespace Chess::Backend
             write_problem(response, 422, "invalid_time_control", "Unprocessable Content", "The time control is out of range.");
             return;
           }
+        }
+        if (parsed.increment_ms != 0)
+        {
+          write_problem(response, 422, "invalid_time_control", "Unprocessable Content",
+                        "Only initial-time clocks are currently supported.");
+          return;
         }
         command.time_control = parsed;
       }

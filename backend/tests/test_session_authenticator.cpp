@@ -165,6 +165,20 @@ namespace
     EXPECT_EQ(auth.session_count(), 8U);
   }
 
+  TEST(SessionConcurrencyTest, BlockedPrincipalCannotReceiveNewSessionsUntilUnblocked)
+  {
+    SessionAuthenticator auth({"https://chess.test"});
+    const Principal principal{"delete-me"};
+    ASSERT_TRUE(auth.create_session(principal));
+    ASSERT_TRUE(auth.block_principal(principal));
+    EXPECT_FALSE(auth.create_session(principal));
+    EXPECT_FALSE(auth.import_session(principal, std::string(64, 'a'),
+        std::chrono::duration_cast<std::chrono::seconds>(
+          std::chrono::system_clock::now().time_since_epoch()).count() + 100));
+    auth.unblock_principal(principal);
+    EXPECT_TRUE(auth.create_session(principal));
+  }
+
   class ConcurrentRevocationProbe final : public ISessionRevocationStore
   {
     public:

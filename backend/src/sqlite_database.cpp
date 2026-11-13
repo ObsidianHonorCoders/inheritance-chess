@@ -77,7 +77,7 @@ namespace Chess::Backend
       return sqlite3_step(statement.get()) == SQLITE_DONE;
     }
 
-    bool validate_schema(sqlite3* database)
+    bool validate_schema(sqlite3* database, bool with_clocks = true)
     {
       int table_count = 0;
       int trigger_count = 0;
@@ -89,13 +89,6 @@ namespace Chess::Backend
           || trigger_count != 0
           || !columns_match(database, "PRAGMA main.table_xinfo('schema_version')", {
                {"version", "INTEGER", 0, 1}})
-          || !columns_match(database, "PRAGMA main.table_xinfo('games')", {
-               {"game_id", "TEXT", 1, 1}, {"white_principal", "TEXT", 1, 0},
-               {"black_principal", "TEXT", 0, 0}, {"initial_fen", "TEXT", 1, 0},
-               {"initial_ms", "INTEGER", 0, 0}, {"increment_ms", "INTEGER", 1, 0, "0"},
-               {"version", "INTEGER", 1, 0, "1"}, {"status", "TEXT", 1, 0, "'ongoing'"},
-               {"draw_offer_by", "TEXT", 0, 0}, {"created_at", "TEXT", 1, 0},
-               {"updated_at", "TEXT", 1, 0}})
           || !columns_match(database, "PRAGMA main.table_xinfo('game_moves')", {
                {"game_id", "TEXT", 1, 1}, {"ply", "INTEGER", 1, 2},
                {"uci", "TEXT", 1, 0}, {"san", "TEXT", 1, 0}})
@@ -106,6 +99,24 @@ namespace Chess::Backend
       {
         return false;
       }
+
+      const bool games_valid = with_clocks
+          ? columns_match(database, "PRAGMA main.table_xinfo('games')", {
+              {"game_id", "TEXT", 1, 1}, {"white_principal", "TEXT", 1, 0},
+              {"black_principal", "TEXT", 0, 0}, {"initial_fen", "TEXT", 1, 0},
+              {"initial_ms", "INTEGER", 0, 0}, {"increment_ms", "INTEGER", 1, 0, "0"},
+              {"version", "INTEGER", 1, 0, "1"}, {"status", "TEXT", 1, 0, "'ongoing'"},
+              {"draw_offer_by", "TEXT", 0, 0}, {"created_at", "TEXT", 1, 0},
+              {"updated_at", "TEXT", 1, 0}, {"clock_white_ms", "INTEGER", 0, 0},
+              {"clock_black_ms", "INTEGER", 0, 0}, {"clock_started_at_ms", "INTEGER", 0, 0}})
+          : columns_match(database, "PRAGMA main.table_xinfo('games')", {
+              {"game_id", "TEXT", 1, 1}, {"white_principal", "TEXT", 1, 0},
+              {"black_principal", "TEXT", 0, 0}, {"initial_fen", "TEXT", 1, 0},
+              {"initial_ms", "INTEGER", 0, 0}, {"increment_ms", "INTEGER", 1, 0, "0"},
+              {"version", "INTEGER", 1, 0, "1"}, {"status", "TEXT", 1, 0, "'ongoing'"},
+              {"draw_offer_by", "TEXT", 0, 0}, {"created_at", "TEXT", 1, 0},
+              {"updated_at", "TEXT", 1, 0}});
+      if (!games_valid) return false;
 
       auto foreign_key = prepare(database, "PRAGMA main.foreign_key_list('game_moves')");
       if (!foreign_key || sqlite3_step(foreign_key.get()) != SQLITE_ROW
@@ -183,7 +194,7 @@ namespace Chess::Backend
         version INTEGER PRIMARY KEY CHECK (version > 0)
       );
       INSERT INTO schema_version(version)
-        SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
+        SELECT 2 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
       CREATE TABLE IF NOT EXISTS games (
         game_id TEXT PRIMARY KEY NOT NULL,
         white_principal TEXT NOT NULL,
@@ -195,7 +206,10 @@ namespace Chess::Backend
         status TEXT NOT NULL DEFAULT 'ongoing',
         draw_offer_by TEXT,
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        clock_white_ms INTEGER,
+        clock_black_ms INTEGER,
+        clock_started_at_ms INTEGER
       );
       CREATE TABLE IF NOT EXISTS game_moves (
         game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
@@ -222,9 +236,41 @@ namespace Chess::Backend
       return;
     }
     int object_count = 0;
-    if (!integer_value(database_, "SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'", object_count)
-        || (object_count == 0 && !execute(database_, schema))
-        || !validate_schema(database_))
+    if (!integer_value(database_, "SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'", object_count))
+    {
+      execute(database_, "ROLLBACK");
+      return;
+    }
+
+    bool schema_ready = false;
+    if (object_count == 0)
+    {
+      schema_ready = execute(database_, schema) && validate_schema(database_, true);
+    }
+    else
+    {
+      int schema_version = 0;
+      if (!integer_value(database_, "SELECT version FROM schema_version", schema_version))
+      {
+        execute(database_, "ROLLBACK");
+        return;
+      }
+      if (schema_version == 1 && validate_schema(database_, false))
+      {
+        schema_ready = execute(database_, "ALTER TABLE games ADD COLUMN clock_white_ms INTEGER")
+            && execute(database_, "ALTER TABLE games ADD COLUMN clock_black_ms INTEGER")
+            && execute(database_, "ALTER TABLE games ADD COLUMN clock_started_at_ms INTEGER")
+            && execute(database_, "UPDATE games SET clock_white_ms=initial_ms, clock_black_ms=initial_ms "
+                                  "WHERE initial_ms IS NOT NULL")
+            && execute(database_, "UPDATE schema_version SET version=2")
+            && validate_schema(database_, true);
+      }
+      else if (schema_version == 2)
+      {
+        schema_ready = validate_schema(database_, true);
+      }
+    }
+    if (!schema_ready)
     {
       execute(database_, "ROLLBACK");
       return;
@@ -233,7 +279,7 @@ namespace Chess::Backend
     sqlite3_stmt* statement = nullptr;
     if (sqlite3_prepare_v2(database_, "SELECT version FROM schema_version", -1, &statement, nullptr) == SQLITE_OK
       && sqlite3_step(statement) == SQLITE_ROW && sqlite3_column_type(statement, 0) == SQLITE_INTEGER
-      && sqlite3_column_int64(statement, 0) == 1
+      && sqlite3_column_int64(statement, 0) == 2
       && sqlite3_step(statement) == SQLITE_DONE)
     {
       initialized_ = true;
@@ -271,7 +317,7 @@ namespace Chess::Backend
       "(SELECT principal_id FROM main.idempotency_records LIMIT 1) FROM main.schema_version");
     return statement && sqlite3_step(statement.get()) == SQLITE_ROW
       && sqlite3_column_type(statement.get(), 0) == SQLITE_INTEGER
-      && sqlite3_column_int64(statement.get(), 0) == 1
+      && sqlite3_column_int64(statement.get(), 0) == 2
       && sqlite3_column_type(statement.get(), 1) == SQLITE_INTEGER
       && sqlite3_column_int(statement.get(), 1) == schema_cookie_
       && sqlite3_column_int(statement.get(), 2) == 1

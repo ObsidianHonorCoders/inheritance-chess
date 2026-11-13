@@ -65,6 +65,18 @@ namespace
     EXPECT_TRUE(accounts.authenticate("change-user", "replacement secure password"));
   }
 
+  TEST(LocalAccountStoreTest, AccountDeletionRequiresPasswordAndRemovesCredential)
+  {
+    TemporaryAccountDatabase path;
+    SqliteLocalAccountStore accounts(path.path().string());
+    ASSERT_TRUE(accounts.is_ready());
+    ASSERT_EQ(accounts.create_account("delete-user", "account deletion password"), AccountCreateResult::Created);
+    EXPECT_EQ(accounts.delete_account("delete-user", "wrong deletion password"), AccountDeleteResult::InvalidPassword);
+    EXPECT_TRUE(accounts.authenticate("delete-user", "account deletion password"));
+    EXPECT_EQ(accounts.delete_account("delete-user", "account deletion password"), AccountDeleteResult::Deleted);
+    EXPECT_FALSE(accounts.authenticate("delete-user", "account deletion password"));
+  }
+
   TEST(LocalAccountStoreTest, RejectsWeakPasswordsAndMalformedAccountNames)
   {
     TemporaryAccountDatabase path;

@@ -301,6 +301,98 @@ namespace
     EXPECT_EQ(application_->maintenance_failures(), 2U);
   }
 
+  TEST_F(SqliteGameOperationsTest, SimpleClockStartsOnBlackJoinAndPersistsMoveTime)
+  {
+    CreateGameCommand command;
+    command.time_control = TimeControl{60000, 0};
+    auto created_result = application_->create_game(white_, command, key());
+    const auto created = success(std::move(created_result));
+    ASSERT_TRUE(created.clock);
+    EXPECT_FALSE(created.clock->running_color);
+    const auto joined_game = success(application_->join_game(black_, created.game_id, created.version, key()));
+    ASSERT_TRUE(joined_game.clock);
+    EXPECT_EQ(joined_game.clock->running_color, "white");
+
+    execute("UPDATE games SET clock_started_at_ms=CAST(strftime('%s','now') AS INTEGER)*1000-5000");
+    const auto moved = success(application_->submit_move(white_, joined_game.game_id,
+        MoveCommand{"e2e4", joined_game.version}, key()));
+    ASSERT_TRUE(moved.clock);
+    EXPECT_NEAR(static_cast<double>(moved.clock->white_remaining_ms), 55000.0, 1500.0);
+    EXPECT_NEAR(static_cast<double>(moved.clock->black_remaining_ms), 60000.0, 1000.0);
+    EXPECT_EQ(moved.clock->running_color, "black");
+  }
+
+  TEST_F(SqliteGameOperationsTest, ClockContinuesAcrossDatabaseReopenAndDrawOffer)
+  {
+    CreateGameCommand command;
+    command.time_control = TimeControl{60000, 0};
+    auto created_result = application_->create_game(white_, command, key());
+    const auto created = success(std::move(created_result));
+    const auto joined_game = success(application_->join_game(black_, created.game_id, created.version, key()));
+    execute("UPDATE games SET clock_started_at_ms=CAST(strftime('%s','now') AS INTEGER)*1000-5000");
+    reopen();
+    auto restored_result = application_->get_game(white_, joined_game.game_id);
+    ASSERT_TRUE(std::holds_alternative<GameSnapshot>(restored_result));
+    auto restored = std::get<GameSnapshot>(std::move(restored_result));
+    ASSERT_TRUE(restored.clock);
+    EXPECT_EQ(restored.clock->running_color, "white");
+    EXPECT_NEAR(static_cast<double>(restored.clock->white_remaining_ms), 55000.0, 1500.0);
+    const auto offered = success(application_->offer_draw(white_, restored.game_id, restored.version, key()));
+    ASSERT_TRUE(offered.clock);
+    EXPECT_EQ(offered.clock->running_color, "white");
+    EXPECT_LT(offered.clock->white_remaining_ms, 56000U);
+  }
+
+  TEST_F(SqliteGameOperationsTest, BackgroundExpiryPersistsTimeoutWithoutClientMove)
+  {
+    CreateGameCommand command;
+    command.time_control = TimeControl{1000, 0};
+    const auto created = success(application_->create_game(white_, command, key()));
+    const auto joined_game = success(application_->join_game(black_, created.game_id, created.version, key()));
+    execute("UPDATE games SET clock_started_at_ms=CAST(strftime('%s','now') AS INTEGER)*1000-3000");
+    std::size_t expired = 0;
+    ASSERT_TRUE(application_->expire_timed_games(64, expired));
+    EXPECT_EQ(expired, 1U);
+    const auto final_state = application_->get_game(white_, joined_game.game_id);
+    ASSERT_TRUE(std::holds_alternative<GameSnapshot>(final_state));
+    EXPECT_EQ(std::get<GameSnapshot>(final_state).status, "white_timeout");
+    EXPECT_TRUE(std::get<GameSnapshot>(final_state).legal_moves.empty());
+  }
+
+  TEST_F(SqliteGameOperationsTest, ExpiredClockWinsAgainstLateMoveBeforeSweepRuns)
+  {
+    CreateGameCommand command;
+    command.time_control = TimeControl{1000, 0};
+    const auto created = success(application_->create_game(white_, command, key()));
+    const auto joined_game = success(application_->join_game(black_, created.game_id, created.version, key()));
+    execute("UPDATE games SET clock_started_at_ms=CAST(strftime('%s','now') AS INTEGER)*1000-3000");
+    const auto rejected = application_->submit_move(white_, joined_game.game_id,
+        MoveCommand{"e2e4", joined_game.version}, key());
+    expect_error(rejected, 409);
+    EXPECT_EQ(std::get<ApplicationError>(rejected).code, "clock_expired");
+    const auto move_count_query = "SELECT count(*) FROM game_moves WHERE game_id='" + joined_game.game_id + "'";
+    const auto status_query = "SELECT status FROM games WHERE game_id='" + joined_game.game_id + "'";
+    EXPECT_EQ(integer(move_count_query.c_str()), 0);
+    EXPECT_EQ(text(status_query.c_str()), "white_timeout");
+  }
+
+  TEST_F(SqliteGameOperationsTest, AccountAnonymizationRetainsGamesAndRemovesRetryRecords)
+  {
+    const auto game = joined();
+    const auto moved = application_->submit_move(white_, game.game_id, {"e2e4", game.version}, key());
+    ASSERT_TRUE(std::holds_alternative<GameSnapshot>(moved));
+    EXPECT_TRUE(application_->anonymize_principal(white_));
+    EXPECT_EQ(integer("SELECT count(*) FROM games WHERE white_principal='white-player' OR black_principal='white-player'"), 0);
+    EXPECT_EQ(integer("SELECT count(*) FROM games WHERE white_principal LIKE 'deleted-%' OR black_principal LIKE 'deleted-%'"), 1);
+    EXPECT_EQ(integer("SELECT count(*) FROM idempotency_records WHERE principal_id='white-player'"), 0);
+    const auto hidden = application_->get_game(white_, game.game_id);
+    expect_error(hidden, 404);
+    const auto history = application_->get_move_history(black_, game.game_id, 0, 10);
+    ASSERT_TRUE(std::holds_alternative<MovePage>(history));
+    ASSERT_EQ(std::get<MovePage>(history).moves.size(), 1U);
+    EXPECT_EQ(std::get<MovePage>(history).moves.front().uci, "e2e4");
+  }
+
   TEST_F(SqliteGameOperationsTest, OnlineBackupRestoresCommittedGamesAndHistory)
   {
     const auto game = joined();
