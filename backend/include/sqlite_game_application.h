@@ -3,6 +3,7 @@
 
 #include "game_application.h"
 #include "sqlite_database.h"
+#include <atomic>
 #include <cstddef>
 #include <mutex>
 
@@ -15,6 +16,8 @@ namespace Chess::Backend
 
       bool is_ready() const override;
       bool cleanup_expired_idempotency(std::size_t maximum_records = 256) noexcept;
+      std::uint64_t maintenance_failures() const noexcept;
+      std::uint64_t maintenance_deleted_records() const noexcept;
       Result<GameSnapshot> create_game(const Principal& principal, const CreateGameCommand& command,
                                        const std::string& idempotency_key) override;
       Result<GameSnapshot> get_game(const Principal& principal, const std::string& game_id) const override;
@@ -34,6 +37,8 @@ namespace Chess::Backend
 
     private:
       SqliteDatabase& database_;
+      std::atomic<std::uint64_t> maintenance_failures_{0};
+      std::atomic<std::uint64_t> maintenance_deleted_records_{0};
   };
 } // namespace Chess::Backend
 

@@ -20,7 +20,7 @@ Each SQLite store exposes `backup_to(path)` using SQLite's online backup API. Th
 `SqliteGameApplication` implements all untimed game operations: create, snapshot, join, legal moves, paginated history, move submission, resignation, and draw offer/acceptance:
 
 - Mutations are atomic with their idempotency records. A retry scoped to the same principal and operation/resource returns the stored original snapshot before checking the fresh version precondition. A different payload/version under the same key returns `409`.
-- Idempotency results remain eligible for replay for 24 hours. An expired key may create a new game. Requests clean up bounded batches, and the service runs a 60-second maintenance pass deleting at most 256 expired records each time. This bounds cleanup work per pass while draining retained rows during inactive periods.
+- Idempotency results remain eligible for replay for 24 hours. An expired key may create a new game. Requests clean up bounded batches, and the service runs a 60-second maintenance pass deleting at most 256 expired records each time. Per-process deleted-row and failure counters are exposed by the application; failures also emit a redacted maintenance event. This bounds cleanup work per pass while draining retained rows during inactive periods.
 - Retries recheck current game visibility before replay. Unknown and non-visible games both return `404`. Storage failures return redacted errors rather than being presented as missing games.
 - Public IDs use 128 bits from the OS random source: BCrypt on Windows and `/dev/urandom` on Unix-like systems. IDs are not credentials.
 - Handlers are reconstructed from initial FEN and contiguous ordered moves, retaining repetition history. A read transaction keeps metadata and moves consistent. Wrappers sharing a database synchronize on its connection mutex; independent connections serialize mutations through SQLite write transactions. Each mutation rechecks participant, seat, turn, status, and expected version. Competing writes cannot both commit at the same version.
@@ -48,6 +48,8 @@ The raw SQLite handle is exposed for storage integration and tests; callers must
 ## Configuration and Verification
 
 `HttpApiConfig` clamps request-body limits to 1-65536 bytes and read/write timeouts to 1-60 seconds. History page limits are clamped to 1-200 items; omitted `limit` defaults to the smaller of 100 and the effective configured limit. These limits do not replace rate limiting or transaction/execution deadlines.
+
+Service startup and `/health/ready` also check that the SQLite volume has the configured free-space reserve (`ICHESS_MIN_FREE_STORAGE_BYTES`, default 64 MiB). This is an early warning threshold, not a promise that later writes will succeed.
 
 Build and run the backend tests from the repository root:
 

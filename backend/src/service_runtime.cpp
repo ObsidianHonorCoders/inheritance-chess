@@ -275,6 +275,29 @@ namespace Chess::Backend
     return port;
   }
 
+  std::uint64_t parse_storage_reserve(std::string_view text)
+  {
+    std::uint64_t bytes = 0;
+    if (text.empty() || text.size() > 20)
+      invalid_configuration();
+    const auto parsed = std::from_chars(text.data(), text.data() + text.size(), bytes);
+    if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size())
+      invalid_configuration();
+    return bytes;
+  }
+
+  bool storage_reserve_available(const std::filesystem::path& path,
+                                 std::uint64_t minimum_free_bytes) noexcept
+  {
+    try
+    {
+      std::error_code error;
+      const auto space = std::filesystem::space(path, error);
+      return !error && space.available >= minimum_free_bytes;
+    }
+    catch (...) { return false; }
+  }
+
   void validate_runtime_config(const ServiceRuntimeConfig& config)
   {
     namespace fs = std::filesystem;

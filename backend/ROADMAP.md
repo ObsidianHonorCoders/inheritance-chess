@@ -10,7 +10,7 @@ The behavioral and security requirements remain in [SERVICE_CONTRACT.md](../docs
 
 ## 1. Durable Game Application
 
-Implemented: pinned SQLite, full schema validation, synchronized connection ownership, all atomic idempotent untimed operations, participant authorization, 128-bit OS IDs, bounded history replay, restart repetition, lifecycle outcomes, scheduled bounded retry-record cleanup, per-store online backups, and live readiness. Retry eligibility lasts 24 hours. Remaining: clock policy and durable timer design, disk/write health monitoring, restore drills, and performance qualification. Timed creation returns `422` until those clock decisions and implementation are completed.
+Implemented: pinned SQLite, full schema validation, synchronized connection ownership, all atomic idempotent untimed operations, participant authorization, 128-bit OS IDs, bounded history replay, restart repetition, lifecycle outcomes, scheduled bounded retry-record cleanup, per-store online backups, free-space reserve readiness, and live readiness. Retry eligibility lasts 24 hours. Remaining: clock policy and durable timer design, disk/write-failure monitoring, restore drills, and performance qualification. Timed creation returns `422` until those clock decisions and implementation are completed.
 
 - Implement `IGameApplication` with participant authorization on every operation, including idempotent replay. Return the same `404` for absent and non-visible games.
 - Start with SQLite on local durable storage and one API process unless multiple instances are already required. Use PostgreSQL for multiple writers or API instances. Use parameterized queries, migrations, foreign keys, uniqueness constraints, and bounded lock waits.

@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <fstream>
 #include <future>
+#include <limits>
 #include <mutex>
 #ifdef _WIN32
 #include <windows.h>
@@ -112,6 +113,23 @@ namespace
     config.port = 8080;
     config.public_origin = "http://chess.test";
     EXPECT_THROW(validate_runtime_config(config), std::runtime_error);
+  }
+
+  TEST(StorageReserveTest, ParsesUnsignedByteThresholdAndRejectsMalformedValues)
+  {
+    EXPECT_EQ(parse_storage_reserve("0"), 0U);
+    EXPECT_EQ(parse_storage_reserve("67108864"), 67108864U);
+    for (const auto* value : {"", "-1", "+1", "1x", "18446744073709551616"})
+      EXPECT_THROW(parse_storage_reserve(value), std::runtime_error);
+  }
+
+  TEST(StorageReserveTest, ChecksAvailableSpaceAndFailsClosedForMissingPaths)
+  {
+    const auto root = std::filesystem::temp_directory_path();
+    EXPECT_TRUE(storage_reserve_available(root, 1));
+    EXPECT_TRUE(storage_reserve_available(root, 0));
+    EXPECT_FALSE(storage_reserve_available(root, (std::numeric_limits<std::uint64_t>::max)()));
+    EXPECT_FALSE(storage_reserve_available(root / "missing-storage-path", 0));
   }
 
   TEST(ServiceRateLimiterTest, CapsBothKeySpacesAndResetsAtTtlWithoutEvictionByAttackers)

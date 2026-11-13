@@ -294,8 +294,11 @@ namespace
     EXPECT_EQ(integer("SELECT count(*) FROM idempotency_records"), 1);
     EXPECT_TRUE(application_->cleanup_expired_idempotency(2));
     EXPECT_EQ(integer("SELECT count(*) FROM idempotency_records"), 0);
+    EXPECT_EQ(application_->maintenance_deleted_records(), 3U);
+    EXPECT_EQ(application_->maintenance_failures(), 0U);
     EXPECT_FALSE(application_->cleanup_expired_idempotency(0));
     EXPECT_FALSE(application_->cleanup_expired_idempotency(1025));
+    EXPECT_EQ(application_->maintenance_failures(), 2U);
   }
 
   TEST_F(SqliteGameOperationsTest, OnlineBackupRestoresCommittedGamesAndHistory)

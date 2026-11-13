@@ -27,10 +27,11 @@ namespace Chess::Backend
     struct PartialFileRemover
     {
         std::filesystem::path path;
+        bool armed = false;
         bool keep = false;
         ~PartialFileRemover()
         {
-          if (!keep)
+          if (armed && !keep)
           {
             std::error_code error;
             std::filesystem::remove(path, error);
@@ -72,6 +73,7 @@ namespace Chess::Backend
           SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_EXCLUSIVE | SQLITE_OPEN_FULLMUTEX, nullptr);
       const std::unique_ptr<sqlite3, DatabaseCloser> target(raw_destination);
       if (opened != SQLITE_OK || target == nullptr) return false;
+        remove_partial.armed = true;
       if (sqlite3_busy_timeout(target.get(), 1000) != SQLITE_OK) return false;
       sqlite3_backup* raw_backup = sqlite3_backup_init(target.get(), "main", source, "main");
       std::unique_ptr<sqlite3_backup, BackupCloser> backup(raw_backup);

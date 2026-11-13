@@ -87,7 +87,8 @@ namespace
             for (int second = 0; second < 60 && !stop_.load(std::memory_order_acquire); ++second)
               std::this_thread::sleep_for(std::chrono::seconds(1));
             if (!stop_.load(std::memory_order_acquire) && !application.cleanup_expired_idempotency())
-              std::clog << "{\"event\":\"idempotency_maintenance_failed\"}\n";
+              std::clog << "{\"event\":\"idempotency_maintenance_failed\",\"failures\":"
+                        << application.maintenance_failures() << "}\n";
           }
         })
       {}
@@ -118,13 +119,15 @@ int main()
     const auto revocation_path = environment("ICHESS_REVOCATION_DB_PATH", true);
     const auto account_path = environment("ICHESS_ACCOUNT_DB_PATH", true);
     const bool allow_registration = parse_boolean(environment("ICHESS_ALLOW_REGISTRATION", false));
+    const auto minimum_free_storage = environment("ICHESS_MIN_FREE_STORAGE_BYTES", false);
     const ServiceRuntimeConfig config{environment("ICHESS_PUBLIC_ORIGIN", true),
         session_path.empty() ? std::filesystem::path{}
           : std::filesystem::path(std::u8string(session_path.begin(), session_path.end())),
       std::filesystem::path(std::u8string(database_path.begin(), database_path.end())),
       std::filesystem::path(std::u8string(revocation_path.begin(), revocation_path.end())),
       std::filesystem::path(std::u8string(account_path.begin(), account_path.end())),
-        port_text.empty() ? 8080 : parse_service_port(port_text)};
+        port_text.empty() ? 8080 : parse_service_port(port_text),
+        minimum_free_storage.empty() ? 64ULL * 1024 * 1024 : parse_storage_reserve(minimum_free_storage)};
     validate_runtime_config(config);
     const auto revocation_utf8 = config.revocation_database_file.u8string();
     const std::string revocation_filename(revocation_utf8.begin(), revocation_utf8.end());
@@ -138,7 +141,8 @@ int main()
     const auto database_utf8 = config.database_file.u8string();
     SqliteDatabase database(std::string(database_utf8.begin(), database_utf8.end()));
     SqliteGameApplication application(database);
-    if (!application.is_ready() || !revocations->is_ready() || !accounts.is_ready())
+    if (!application.is_ready() || !revocations->is_ready() || !accounts.is_ready()
+      || !storage_reserve_available(config.database_file.parent_path(), config.minimum_free_storage_bytes))
       throw std::runtime_error("Storage initialization failed.");
     ServiceRateLimiter limiter;
     RuntimeObserver observer([](std::string event) { std::clog << event << '\n'; });
@@ -146,7 +150,10 @@ int main()
     HttpApiConfig api_config;
     api_config.allow_registration = allow_registration;
     register_http_api(server, authenticator, application, api_config,
-      [revocations, &accounts] { return revocations->is_ready() && accounts.is_ready(); },
+      [revocations, &accounts, config] {
+        return revocations->is_ready() && accounts.is_ready()
+            && storage_reserve_available(config.database_file.parent_path(), config.minimum_free_storage_bytes);
+      },
       &accounts, &authenticator);
     configure_service_runtime(server, authenticator, limiter, &observer);
     if (!server.bind_to_port("127.0.0.1", config.port)) throw std::runtime_error("Listener initialization failed.");

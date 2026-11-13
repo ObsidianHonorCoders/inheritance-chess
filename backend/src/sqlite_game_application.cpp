@@ -764,6 +764,7 @@ namespace Chess::Backend
     {
       if (maximum_records == 0 || maximum_records > 1024 || !database_.is_ready())
       {
+        maintenance_failures_.fetch_add(1, std::memory_order_relaxed);
         return false;
       }
       std::lock_guard<std::mutex> lock(database_.mutex());
@@ -771,6 +772,7 @@ namespace Chess::Backend
       Transaction transaction(database);
       if (!transaction)
       {
+        maintenance_failures_.fetch_add(1, std::memory_order_relaxed);
         return false;
       }
       Statement cleanup(database, "DELETE FROM idempotency_records WHERE rowid IN "
@@ -780,15 +782,34 @@ namespace Chess::Backend
       if (!cleanup || sqlite3_bind_int64(cleanup.get(), 1, static_cast<sqlite3_int64>(maximum_records)) != SQLITE_OK
           || sqlite3_step(cleanup.get()) != SQLITE_DONE)
       {
+        maintenance_failures_.fetch_add(1, std::memory_order_relaxed);
         return false;
       }
+      const auto deleted = static_cast<std::uint64_t>(sqlite3_changes(database));
       ExecutionBudget::checkpoint();
-      return transaction.commit();
+      if (!transaction.commit())
+      {
+        maintenance_failures_.fetch_add(1, std::memory_order_relaxed);
+        return false;
+      }
+      maintenance_deleted_records_.fetch_add(deleted, std::memory_order_relaxed);
+      return true;
     }
     catch (...)
     {
+      maintenance_failures_.fetch_add(1, std::memory_order_relaxed);
       return false;
     }
+  }
+
+  std::uint64_t SqliteGameApplication::maintenance_failures() const noexcept
+  {
+    return maintenance_failures_.load(std::memory_order_relaxed);
+  }
+
+  std::uint64_t SqliteGameApplication::maintenance_deleted_records() const noexcept
+  {
+    return maintenance_deleted_records_.load(std::memory_order_relaxed);
   }
 
   Result<GameSnapshot> SqliteGameApplication::create_game(const Principal& principal, const CreateGameCommand& command,

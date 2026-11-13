@@ -34,9 +34,13 @@ namespace Chess::Backend
       std::filesystem::path revocation_database_file;
       std::filesystem::path account_database_file;
       int port = 8080;
+        std::uint64_t minimum_free_storage_bytes = 64ULL * 1024 * 1024;
   };
 
   int parse_service_port(std::string_view text);
+  std::uint64_t parse_storage_reserve(std::string_view text);
+  bool storage_reserve_available(const std::filesystem::path& path,
+                                 std::uint64_t minimum_free_bytes) noexcept;
   void validate_runtime_config(const ServiceRuntimeConfig& config);
 
   struct RateLimitConfig
