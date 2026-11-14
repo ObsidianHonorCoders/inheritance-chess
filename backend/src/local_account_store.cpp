@@ -13,6 +13,7 @@
 #include <bcrypt.h>
 #elif defined(__APPLE__)
 #include <CommonCrypto/CommonKeyDerivation.h>
+#include <CommonCrypto/CommonCryptoError.h>
 #else
 #include <openssl/evp.h>
 #endif

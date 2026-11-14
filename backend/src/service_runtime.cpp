@@ -292,6 +292,7 @@ namespace Chess::Backend
     try
     {
       std::error_code error;
+      if (!std::filesystem::is_directory(path, error) || error) return false;
       const auto space = std::filesystem::space(path, error);
       return !error && space.available >= minimum_free_bytes;
     }
