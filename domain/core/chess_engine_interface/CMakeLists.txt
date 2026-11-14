@@ -21,7 +21,6 @@ target_link_libraries(cei PUBLIC
     cci
     cpl
     cbm
-    ctu
 )
 
 # Compiler-specific options

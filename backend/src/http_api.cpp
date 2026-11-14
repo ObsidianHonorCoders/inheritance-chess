@@ -1,13 +1,17 @@
 #include "http_api.h"
+#include "execution_budget.h"
 
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <charconv>
 #include <cctype>
 #include <limits>
+#include <set>
+#include <stdexcept>
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 namespace Chess::Backend
 {
@@ -68,6 +72,19 @@ namespace Chess::Backend
       response.set_content(body.dump(), "application/problem+json; charset=utf-8");
     }
 
+    bool validate_unique_headers(const httplib::Request& request, httplib::Response& response)
+    {
+      for (const char* name : {"Cookie", "Origin", "X-CSRF-Token", "Idempotency-Key", "If-Match", "Content-Type"})
+      {
+        if (request.get_header_value_count(name) > 1)
+        {
+          write_problem(response, 400, "invalid_header", "Bad Request", "A request header is ambiguous.");
+          return false;
+        }
+      }
+      return true;
+    }
+
     bool authenticate(const httplib::Request& request,
                       const IRequestAuthenticator& authenticator,
                       bool state_changing,
@@ -84,6 +101,11 @@ namespace Chess::Backend
                       forbidden ? "request_forbidden" : "unauthenticated",
                       forbidden ? "Forbidden" : "Unauthorized",
                       forbidden ? "The request could not be verified." : "Authentication is required.");
+        return false;
+      }
+
+      if (!validate_unique_headers(request, response))
+      {
         return false;
       }
 
@@ -160,6 +182,33 @@ namespace Chess::Backend
         return true;
       }
 
+      std::size_t occurrences = 0;
+      const auto query_start = request.target.find('?');
+      if (query_start != std::string::npos)
+      {
+        std::string_view remaining(request.target.data() + query_start + 1, request.target.size() - query_start - 1);
+        while (!remaining.empty())
+        {
+          const auto separator = remaining.find('&');
+          const auto pair = remaining.substr(0, separator);
+          const auto raw_name = pair.substr(0, pair.find('='));
+          if (httplib::detail::decode_url(std::string(raw_name), true) == name)
+          {
+            ++occurrences;
+          }
+          if (separator == std::string_view::npos)
+          {
+            break;
+          }
+          remaining.remove_prefix(separator + 1);
+        }
+      }
+      if (occurrences > 1 || request.get_param_value_count(name) > 1)
+      {
+        write_problem(response, 400, "invalid_query", "Bad Request", "A query parameter is invalid.");
+        return false;
+      }
+
       const std::string raw = request.get_param_value(name);
       const auto parsed = std::from_chars(raw.data(), raw.data() + raw.size(), value);
       if (raw.empty() || parsed.ec != std::errc{} || parsed.ptr != raw.data() + raw.size() || value > maximum)
@@ -202,9 +251,42 @@ namespace Chess::Backend
       }
       try
       {
-        body = Json::parse(request.body);
+        std::vector<std::set<std::string>> object_keys;
+        const auto validate_structure = [&object_keys](int depth, Json::parse_event_t event, Json& value) {
+          if (depth > 16)
+          {
+            throw std::invalid_argument("JSON nesting limit exceeded");
+          }
+          if (event == Json::parse_event_t::object_start)
+          {
+            object_keys.emplace_back();
+          }
+          else if (event == Json::parse_event_t::key)
+          {
+            if (!object_keys.back().insert(value.get<std::string>()).second)
+            {
+              throw std::invalid_argument("Duplicate JSON key");
+            }
+          }
+          else if (event == Json::parse_event_t::object_end)
+          {
+            object_keys.pop_back();
+          }
+          return true;
+        };
+        body = Json::parse(request.body, validate_structure);
       }
       catch (const Json::parse_error&)
+      {
+        write_problem(response, 400, "invalid_json", "Bad Request", "The request body is not valid JSON.");
+        return false;
+      }
+      catch (const Json::out_of_range&)
+      {
+        write_problem(response, 400, "invalid_json", "Bad Request", "The request body is not valid JSON.");
+        return false;
+      }
+      catch (const std::invalid_argument&)
       {
         write_problem(response, 400, "invalid_json", "Bad Request", "The request body is not valid JSON.");
         return false;
@@ -234,6 +316,21 @@ namespace Chess::Backend
         {
           return false;
         }
+      }
+      return true;
+    }
+
+    bool validate_empty_body(const httplib::Request& request, httplib::Response& response)
+    {
+      Json body;
+      if (!parse_json_body(request, response, body, true))
+      {
+        return false;
+      }
+      if (!body.empty())
+      {
+        write_problem(response, 400, "unknown_field", "Bad Request", "The request contains an unsupported field.");
+        return false;
       }
       return true;
     }
@@ -301,6 +398,23 @@ namespace Chess::Backend
 
     bool valid_game_id(std::string_view game_id);
 
+    class PasswordWiper
+    {
+      public:
+        explicit PasswordWiper(std::string& value) : value_(value) {}
+        ~PasswordWiper()
+        {
+          volatile char* value = value_.data();
+          for (std::size_t index = 0; index < value_.size(); ++index) value[index] = 0;
+        }
+
+        PasswordWiper(const PasswordWiper&) = delete;
+        PasswordWiper& operator=(const PasswordWiper&) = delete;
+
+      private:
+        std::string& value_;
+    };
+
     void write_snapshot_result(httplib::Response& response, Result<GameSnapshot> result, int success_status,
                                bool set_location = false)
     {
@@ -364,7 +478,10 @@ namespace Chess::Backend
   void register_http_api(httplib::Server& server,
                          const IRequestAuthenticator& authenticator,
                          IGameApplication& application,
-                         const HttpApiConfig& config)
+                         const HttpApiConfig& config,
+                         std::function<bool()> additional_readiness,
+                         ILocalAccountStore* accounts,
+                         ILoginSessionManager* sessions)
   {
     server.set_payload_max_length(std::clamp(config.max_request_body_bytes, std::size_t{1}, std::size_t{64 * 1024}));
     server.set_read_timeout(std::clamp(config.read_timeout_seconds, std::time_t{1}, std::time_t{60}));
@@ -389,15 +506,51 @@ namespace Chess::Backend
         write_problem(response, 404, "not_found", "Not Found", "The requested resource was not found.");
       }
     });
-    server.set_exception_handler([](const httplib::Request&, httplib::Response& response, std::exception_ptr) {
+    server.set_exception_handler([](const httplib::Request&, httplib::Response& response, std::exception_ptr failure) {
+      try
+      {
+        if (failure)
+        {
+          std::rethrow_exception(failure);
+        }
+      }
+      catch (const ExecutionDeadlineExceeded&)
+      {
+        response.headers.erase("ETag");
+        response.headers.erase("Location");
+        write_problem(response, 503, "execution_timeout", "Service Unavailable", "The request execution budget was exceeded.");
+        return;
+      }
+      catch (...)
+      {
+      }
       write_problem(response, 500, "internal_error", "Internal Server Error", "The request could not be completed.");
     });
 
-    server.Get("/api/v1/health/live", [](const httplib::Request&, httplib::Response& response) {
+    server.Get("/api/v1/health/live", [](const httplib::Request& request, httplib::Response& response) {
+      if (!validate_unique_headers(request, response))
+      {
+        return;
+      }
       write_json(response, 200, Json{{"status", "ok"}});
     });
-    server.Get("/api/v1/health/ready", [&application](const httplib::Request&, httplib::Response& response) {
-      if (!application.is_ready())
+    server.Get("/api/v1/health/ready", [&application, additional_readiness](const httplib::Request& request,
+                                                                            httplib::Response& response) {
+      if (!validate_unique_headers(request, response))
+      {
+        return;
+      }
+      bool dependencies_ready = false;
+      try
+      {
+        dependencies_ready = application.is_ready()
+            && (!additional_readiness || additional_readiness());
+      }
+      catch (...)
+      {
+        dependencies_ready = false;
+      }
+      if (!dependencies_ready)
       {
         write_problem(response, 503, "not_ready", "Service Unavailable", "A required service dependency is unavailable.");
         return;
@@ -418,6 +571,234 @@ namespace Chess::Backend
       }
       write_json(response, 200, Json{{"csrfToken", csrf_token}});
     });
+    if (accounts != nullptr && sessions != nullptr)
+    {
+      const auto credentials = [](const httplib::Request& request, httplib::Response& response,
+                                  std::string& username, std::string& password) {
+        Json body;
+        if (!parse_json_body(request, response, body, false)) return false;
+        if (!has_only_fields(body, {"username", "password"}) || body.size() != 2
+            || !body["username"].is_string() || !body["password"].is_string())
+        {
+          write_problem(response, 400, "invalid_credentials", "Bad Request", "Username and password are required.");
+          return false;
+        }
+        username = body["username"].get<std::string>();
+        password = body["password"].get<std::string>();
+        if (username.size() < 3 || username.size() > 32 || password.size() < 12 || password.size() > 1024
+            || password.find('\0') != std::string::npos)
+        {
+          write_problem(response, 400, "invalid_credentials", "Bad Request", "Username or password is invalid.");
+          return false;
+        }
+        for (char& character : username)
+        {
+          if (character >= 'A' && character <= 'Z') character = static_cast<char>(character + ('a' - 'A'));
+          else if (!((character >= 'a' && character <= 'z') || (character >= '0' && character <= '9')
+                     || character == '.' || character == '_' || character == '-'))
+          {
+            write_problem(response, 400, "invalid_credentials", "Bad Request", "Username or password is invalid.");
+            return false;
+          }
+        }
+        return true;
+      };
+      const auto complete_login = [](const std::optional<SessionCredentials>& issued,
+                                     httplib::Response& response, int status) {
+        if (!issued)
+        {
+          write_problem(response, 503, "session_capacity", "Service Unavailable",
+                        "A session could not be created.");
+          return;
+        }
+        response.set_header("Set-Cookie", issued->set_cookie);
+        write_json(response, status, Json{{"csrfToken", issued->csrf_token}, {"expires", issued->expires}});
+      };
+        if (config.allow_registration)
+        {
+          server.Post("/api/v1/auth/register", [accounts, sessions, credentials, complete_login](
+              const httplib::Request& request, httplib::Response& response) {
+            if (!validate_unique_headers(request, response)) return;
+            if (!sessions->accepts_login_origin(request))
+            {
+              write_problem(response, 403, "request_forbidden", "Forbidden", "The request could not be verified.");
+              return;
+            }
+            std::string username;
+            std::string password;
+            PasswordWiper wipe_password(password);
+            if (!credentials(request, response, username, password)) return;
+            switch (accounts->create_account(username, password))
+            {
+              case AccountCreateResult::AlreadyExists:
+                write_problem(response, 409, "account_unavailable", "Conflict", "The account could not be created.");
+                return;
+              case AccountCreateResult::Unavailable:
+                write_problem(response, 503, "account_service_unavailable", "Service Unavailable",
+                              "The account could not be created.");
+                return;
+              case AccountCreateResult::Created:
+                break;
+            }
+            complete_login(sessions->issue_session(Principal{username}), response, 201);
+          });
+        }
+      server.Post("/api/v1/auth/login", [accounts, sessions, credentials, complete_login](
+          const httplib::Request& request, httplib::Response& response) {
+        if (!validate_unique_headers(request, response)) return;
+        if (!sessions->accepts_login_origin(request))
+        {
+          write_problem(response, 403, "request_forbidden", "Forbidden", "The request could not be verified.");
+          return;
+        }
+        std::string username;
+        std::string password;
+          PasswordWiper wipe_password(password);
+        if (!credentials(request, response, username, password)) return;
+        const auto principal = accounts->authenticate(username, password);
+        if (!principal)
+        {
+          if (!accounts->is_ready())
+          {
+            write_problem(response, 503, "account_service_unavailable", "Service Unavailable",
+                          "Authentication is temporarily unavailable.");
+            return;
+          }
+          write_problem(response, 401, "invalid_credentials", "Unauthorized", "Username or password is incorrect.");
+          return;
+        }
+        complete_login(sessions->issue_session(*principal), response, 200);
+      });
+      server.Post("/api/v1/auth/password", [&authenticator, accounts, sessions, complete_login](
+          const httplib::Request& request, httplib::Response& response) {
+        Principal principal;
+        if (!authenticate(request, authenticator, true, response, principal)) return;
+        Json body;
+        if (!parse_json_body(request, response, body, false)) return;
+        if (!has_only_fields(body, {"currentPassword", "newPassword"}) || body.size() != 2
+            || !body["currentPassword"].is_string() || !body["newPassword"].is_string())
+        {
+          write_problem(response, 400, "invalid_password_change", "Bad Request",
+                        "Current and new passwords are required.");
+          return;
+        }
+        std::string current_password = body["currentPassword"].get<std::string>();
+        std::string new_password = body["newPassword"].get<std::string>();
+        PasswordWiper wipe_current(current_password);
+        PasswordWiper wipe_new(new_password);
+        if (new_password.size() < 12 || new_password.size() > 1024
+            || new_password.find('\0') != std::string::npos
+            || current_password.size() < 12 || current_password.size() > 1024
+            || current_password.find('\0') != std::string::npos
+            || current_password == new_password)
+        {
+          write_problem(response, 400, "invalid_password_change", "Bad Request",
+                        "The new password is invalid.");
+          return;
+        }
+        if (!accounts->authenticate(principal.id, current_password))
+        {
+          if (!accounts->is_ready())
+          {
+            write_problem(response, 503, "account_service_unavailable", "Service Unavailable",
+                          "Password change is temporarily unavailable.");
+            return;
+          }
+          write_problem(response, 401, "invalid_credentials", "Unauthorized",
+                        "The current password is incorrect.");
+          return;
+        }
+        if (!sessions->revoke_principal_sessions(principal))
+        {
+          write_problem(response, 503, "session_revocation_failed", "Service Unavailable",
+                        "Password change is temporarily unavailable.");
+          return;
+        }
+        const auto changed = accounts->change_password(principal.id, current_password, new_password);
+        if (changed != PasswordChangeResult::Changed)
+        {
+          if (changed == PasswordChangeResult::InvalidCurrentPassword)
+            write_problem(response, 401, "invalid_credentials", "Unauthorized", "The current password is incorrect.");
+          else
+            write_problem(response, 503, "account_service_unavailable", "Service Unavailable",
+                          "Password change is temporarily unavailable.");
+          return;
+        }
+        complete_login(sessions->issue_session(principal), response, 200);
+      });
+      server.Post("/api/v1/auth/delete", [&authenticator, accounts, sessions, &application](
+          const httplib::Request& request, httplib::Response& response) {
+        Principal principal;
+        if (!authenticate(request, authenticator, true, response, principal)) return;
+        Json body;
+        if (!parse_json_body(request, response, body, false)) return;
+        if (!has_only_fields(body, {"currentPassword"}) || body.size() != 1
+            || !body["currentPassword"].is_string())
+        {
+          write_problem(response, 400, "invalid_account_deletion", "Bad Request",
+                        "The current password is required.");
+          return;
+        }
+        std::string password = body["currentPassword"].get<std::string>();
+        PasswordWiper wipe_password(password);
+        if (!accounts->authenticate(principal.id, password))
+        {
+          if (!accounts->is_ready())
+            write_problem(response, 503, "account_service_unavailable", "Service Unavailable",
+                          "Account deletion is temporarily unavailable.");
+          else
+            write_problem(response, 401, "invalid_credentials", "Unauthorized", "The current password is incorrect.");
+          return;
+        }
+        if (!sessions->block_principal(principal))
+        {
+          write_problem(response, 503, "session_revocation_failed", "Service Unavailable",
+                        "Account deletion is temporarily unavailable.");
+          return;
+        }
+        if (!sessions->revoke_principal_sessions(principal))
+        {
+          sessions->unblock_principal(principal);
+          write_problem(response, 503, "session_revocation_failed", "Service Unavailable",
+                        "Account deletion is temporarily unavailable.");
+          return;
+        }
+        if (!application.anonymize_principal(principal))
+        {
+          sessions->unblock_principal(principal);
+          write_problem(response, 503, "game_storage_unavailable", "Service Unavailable",
+                        "Account deletion is temporarily unavailable.");
+          return;
+        }
+        const auto deleted = accounts->delete_account(principal.id, password);
+        if (deleted != AccountDeleteResult::Deleted)
+        {
+          sessions->unblock_principal(principal);
+          if (deleted == AccountDeleteResult::InvalidPassword)
+            write_problem(response, 401, "invalid_credentials", "Unauthorized", "The current password is incorrect.");
+          else
+            write_problem(response, 503, "account_service_unavailable", "Service Unavailable",
+                          "Account deletion is temporarily unavailable.");
+          return;
+        }
+        response.set_header("Set-Cookie", "__Host-ichess_session=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0");
+        write_json(response, 200, Json{{"status", "deleted"}});
+      });
+      server.Post("/api/v1/auth/logout", [&authenticator, sessions](
+          const httplib::Request& request, httplib::Response& response) {
+        Principal principal;
+        if (!authenticate(request, authenticator, true, response, principal)) return;
+        if (!validate_empty_body(request, response)) return;
+        if (!sessions->revoke_request_session(request))
+        {
+          write_problem(response, 503, "session_revocation_failed", "Service Unavailable",
+                        "The session could not be ended.");
+          return;
+        }
+        response.set_header("Set-Cookie", "__Host-ichess_session=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0");
+        write_json(response, 200, Json{{"status", "ok"}});
+      });
+    }
     server.Post("/api/v1/games", [&authenticator, &application](const httplib::Request& request, httplib::Response& response) {
       Principal principal;
       if (!authenticate_request(request, authenticator, true, response, principal))
@@ -482,6 +863,12 @@ namespace Chess::Backend
             return;
           }
         }
+        if (parsed.increment_ms != 0)
+        {
+          write_problem(response, 422, "invalid_time_control", "Unprocessable Content",
+                        "Only initial-time clocks are currently supported.");
+          return;
+        }
         command.time_control = parsed;
       }
 
@@ -507,6 +894,10 @@ namespace Chess::Backend
       }
       std::uint64_t version = 0;
       if (!parse_expected_version(request, response, version))
+      {
+        return;
+      }
+      if (!validate_empty_body(request, response))
       {
         return;
       }
@@ -545,11 +936,12 @@ namespace Chess::Backend
         return;
       }
       std::uint64_t after_ply = 0;
-      std::uint64_t limit = 100;
+        const std::size_t maximum_page_size = std::clamp(config.max_history_page_size, std::size_t{1}, std::size_t{200});
+        std::uint64_t limit = 0;
       const bool after_ply_ok =
           parse_unsigned_query(request, "afterPly", 0, std::numeric_limits<std::uint64_t>::max(), response, after_ply);
       const bool limit_ok = after_ply_ok
-          && parse_unsigned_query(request, "limit", 100, std::min(config.max_history_page_size, std::size_t{200}), response, limit);
+          && parse_unsigned_query(request, "limit", std::min(maximum_page_size, std::size_t{100}), maximum_page_size, response, limit);
       if (!after_ply_ok || !limit_ok)
       {
         return; // error already written by parse_unsigned_query
@@ -617,6 +1009,10 @@ namespace Chess::Backend
         }
         std::uint64_t version = 0;
         if (!parse_expected_version(request, response, version))
+        {
+          return;
+        }
+        if (!validate_empty_body(request, response))
         {
           return;
         }

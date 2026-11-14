@@ -1,0 +1,36 @@
+[Unit]
+Description=Inheritance Chess private-preview API
+After=network.target
+
+[Service]
+Type=simple
+User=ichess
+Group=ichess
+StateDirectory=ichess
+StateDirectoryMode=0700
+EnvironmentFile=/etc/ichess/service.env
+ExecStart=/opt/inheritance-chess/bin/ichess_service
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=15s
+KillSignal=SIGTERM
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/ichess
+
+[Install]
+WantedBy=multi-user.target

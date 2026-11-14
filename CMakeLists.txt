@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 project(
     inheritance_chess_project
     VERSION 0.0.0
-    LANGUAGES CXX
+    LANGUAGES C CXX
     DESCRIPTION "Modular C++ chess engine"
     HOMEPAGE_URL "https://github.com/ObsidianHonorCoders/inheritance-chess"
 )
@@ -95,17 +95,24 @@ endif()
 # Installation and package export
 include(GNUInstallDirs)
 
+set(INHERITANCE_CHESS_INSTALL_TARGETS
+    cci
+    cpl
+    cbm
+    ctu
+    ces
+    cgh
+    cei
+    ${EXE_NAME}
+    ichess_2p
+)
+if(ICHESS_BUILD_BACKEND)
+    list(APPEND INHERITANCE_CHESS_INSTALL_TARGETS ichess_service)
+endif()
+
 install(
     TARGETS
-        cci
-        cpl
-        cbm
-        ctu
-        ces
-        cgh
-        cei
-        ${EXE_NAME}
-        ichess_2p
+        ${INHERITANCE_CHESS_INSTALL_TARGETS}
     EXPORT ${PROJECT_NAME}-targets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

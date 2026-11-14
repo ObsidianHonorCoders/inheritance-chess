@@ -10,8 +10,9 @@ This document defines the first browser-facing service boundary. The machine-rea
 - The backend is authoritative for game state, move legality, clocks, and outcomes. The browser never decides whether a move is legal.
 - Version 1 supports authenticated, two-seat standard chess. The creator occupies White; the first eligible second participant joins as Black. Spectators and matchmaking are out of scope.
 - Initial FEN is optional and defaults to the standard position. Only standard chess is supported; variants are not implied.
+- Optional time control is simple initial-time-only (1 ms to 24 hours, no increment). White's clock starts when Black joins. Remaining balances and a UTC start timestamp persist across restart; a background worker commits timeouts without requiring a client request. Host wall-clock synchronization is required.
 - Game mutations after creation require the latest game ETag in `If-Match`. A successful mutation returns the complete new snapshot and its new ETag. Creation instead requires an idempotency key.
-- Every state-changing request requires an `Idempotency-Key`. Reuse it only to retry the same logical request after an uncertain network result; reusing it with a different payload is a conflict.
+- Every game-state mutation requires an `Idempotency-Key`. Reuse it only to retry the same logical request after an uncertain network result; reusing it with a different payload is a conflict. Authentication operations use session revocation and password verification instead.
 - Idempotency records are scoped to the authenticated principal and route, retained for a documented bounded period, and checked before applying a fresh version precondition on a completed retry. Reauthorize the request before replaying a stored response.
 - Moves use lowercase UCI coordinates such as `e2e4` or `e7e8q`; SAN is presentation/history data, not the command format.
 - All errors use `application/problem+json` (RFC 9457) with a stable application `code`. Do not return stack traces, SQL details, filesystem paths, or internal C++ diagnostics.
@@ -22,6 +23,11 @@ This document defines the first browser-facing service boundary. The machine-rea
 |---|---|---|
 | `GET /api/v1/health/live` | Process liveness | No dependency or deployment details in the response. Keep it private to the proxy/health-check network. |
 | `GET /api/v1/health/ready` | Dependency readiness | Returns `503` if required storage is unavailable; keep private to the proxy/health-check network. |
+| `POST /api/v1/auth/register` | Register local account | Exact `Origin`; returns secure HttpOnly session cookie and CSRF token. May be disabled by operator. |
+| `POST /api/v1/auth/login` | Login local account | Exact `Origin`; generic credential failures; returns secure HttpOnly session cookie and CSRF token. |
+| `POST /api/v1/auth/logout` | Revoke current session | Requires exact `Origin` and session CSRF token; expires browser cookie. |
+| `POST /api/v1/auth/password` | Change password | Requires current password, exact `Origin`, and CSRF; revokes existing sessions and issues a fresh one. |
+| `POST /api/v1/auth/delete` | Delete account | Requires current password, exact `Origin`, and CSRF; revokes sessions and anonymizes retained games/history. |
 | `GET /api/v1/session` | Session/CSRF bootstrap | Requires an established session; returns a session-bound CSRF token without exposing the internal principal ID. Send `Cache-Control: no-store`. |
 | `POST /api/v1/games` | Create game | Requires `Idempotency-Key`; retries with the same key and same request return the original result. Creator is White. |
 | `GET /api/v1/games/{gameId}` | Read snapshot | Requires a participant session; use `ETag` for subsequent writes. |
@@ -43,7 +49,8 @@ Error semantics: `400` malformed request; `401` no valid session; `403` CSRF or 
 - For a same-origin browser, use an opaque server-side session in a `__Host-ichess_session` cookie with `Secure`, `HttpOnly`, `Path=/`, no `Domain`, and an appropriate `SameSite` policy. Rotate the session on authentication and privilege changes; expire and revoke it server-side.
 - Every state-changing cookie-authenticated request requires a CSRF token in `X-CSRF-Token`, obtained from `GET /api/v1/session` and checked against the session. Do not cache the bootstrap response. Also validate `Origin` against the configured application origin. `SameSite` is defense in depth, not the only CSRF control.
 - For a private preview, Cloudflare Access can add an identity gate, but the backend must still validate trusted identity assertions and authorize each game operation. Never trust a client-supplied identity header. Strip identity headers at the proxy, accept assertions only from the trusted connector path, and validate signature, issuer, audience, and expiry.
-- For a public service, use an established OIDC provider and server-validated sessions. Do not put long-lived credentials or provider secrets in frontend code or browser storage.
+- Local username/password registration and login are supported through server-side accounts with salted PBKDF2-HMAC-SHA256 password hashes; registration can be disabled by the operator. Password reset, email verification, and MFA are not currently provided, so define account-recovery and abuse policies before broad public onboarding. Social login is optional and can later map a verified external identity to the same server-side session interface. Never put passwords, long-lived credentials, or provider secrets in frontend code or browser storage.
+- Authenticated users can change passwords after confirming the current password; all existing sessions for that principal are revoked and a fresh session is issued. Account deletion requires the current password, revokes sessions, anonymizes both seat principal IDs, deletes that principal's idempotency rows, and retains games/move history for the other participant. Because account and game data live in separate SQLite files, a storage failure during deletion may require retrying the operation; deployment operators must keep the database volume healthy and backups coordinated.
 - The creator can read and mutate their game while seated. The second participant can access it only after joining. Each mutation additionally checks the caller's seat, turn where applicable, and ongoing game state.
 - Return `404` for games the caller cannot see to reduce enumeration; the high-entropy identifier is not authorization.
 

@@ -67,7 +67,18 @@ set(CEI_TEST_SOURCES
 set(BACKEND_TEST_SOURCES)
 set(BACKEND_TEST_LIBS)
 if(ICHESS_BUILD_BACKEND)
-    set(BACKEND_TEST_SOURCES ../backend/tests/test_http_api.cpp)
+    set(BACKEND_TEST_SOURCES
+        ../backend/tests/test_http_api.cpp
+        ../backend/tests/test_sqlite_database.cpp
+        ../backend/tests/test_sqlite_game_operations.cpp
+        ../backend/tests/test_http_validation.cpp
+        ../backend/tests/test_session_authenticator.cpp
+        ../backend/tests/test_local_account_store.cpp
+        ../backend/tests/test_session_revocation_store.cpp
+        ../backend/tests/test_service_runtime.cpp
+        ../backend/tests/test_execution_budget.cpp
+        ../backend/tests/test_observability.cpp
+    )
     set(BACKEND_TEST_LIBS ichess_backend)
 endif()
 

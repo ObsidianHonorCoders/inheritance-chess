@@ -20,8 +20,62 @@ FetchContent_Declare(nlohmann_json
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+FetchContent_Declare(sqlite3
+    URL https://www.sqlite.org/2026/sqlite-amalgamation-3540100.zip
+    URL_HASH SHA256=0A9C8E34352DAD46006AA82836D5383BFF9DC6BC9CE5A60553C05AA30E6AD1F9
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(sqlite3)
+
+set(SQLITE3_SOURCE "${sqlite3_SOURCE_DIR}/sqlite3.c")
+file(READ "${SQLITE3_SOURCE}" SQLITE3_SOURCE_CONTENT)
+# Keep SQLite's bundled source warning-clean under the repository's -Werror flags.
+macro(sqlite3_apply_warning_fix old_text new_text)
+    string(FIND "${SQLITE3_SOURCE_CONTENT}" "${old_text}" OLD_TEXT_POSITION)
+    if(OLD_TEXT_POSITION EQUAL -1)
+        string(FIND "${SQLITE3_SOURCE_CONTENT}" "${new_text}" NEW_TEXT_POSITION)
+        if(NEW_TEXT_POSITION EQUAL -1)
+            message(FATAL_ERROR "Expected SQLite warning site was not found: ${old_text}")
+        endif()
+    else()
+        string(REPLACE "${old_text}" "${new_text}" SQLITE3_SOURCE_CONTENT "${SQLITE3_SOURCE_CONTENT}")
+    endif()
+endmacro()
+
+sqlite3_apply_warning_fix(
+    "return 0x3fffffff & (int)strlen(z);"
+    "const char *zEnd = z;\n  while( *zEnd ) zEnd++;\n  return 0x3fffffff & (int)(zEnd-z);"
+)
+sqlite3_apply_warning_fix(
+    "  DWORD nMs\n){\n  DWORD flags"
+    "  DWORD nMs\n){\n  (void)nMs;\n  DWORD flags"
+)
+sqlite3_apply_warning_fix(
+    "static int winUnfetch(sqlite3_file *fd, i64 iOff, void *p){\n#if SQLITE_MAX_MMAP_SIZE>0"
+    "static int winUnfetch(sqlite3_file *fd, i64 iOff, void *p){\n  (void)iOff;\n#if SQLITE_MAX_MMAP_SIZE>0"
+)
+file(WRITE "${SQLITE3_SOURCE}" "${SQLITE3_SOURCE_CONTENT}")
+unset(SQLITE3_SOURCE_CONTENT)
+
+add_library(ichess_sqlite STATIC ${sqlite3_SOURCE_DIR}/sqlite3.c)
+target_include_directories(ichess_sqlite PUBLIC ${sqlite3_SOURCE_DIR})
+target_compile_definitions(ichess_sqlite PRIVATE
+    SQLITE_THREADSAFE=1
+    SQLITE_DEFAULT_FOREIGN_KEYS=1
+    SQLITE_DQS=0
+    SQLITE_OMIT_LOAD_EXTENSION
+)
+
 add_library(ichess_backend STATIC
     src/http_api.cpp
+    src/sqlite_database.cpp
+    src/sqlite_backup.cpp
+    src/sqlite_game_application.cpp
+    src/session_authenticator.cpp
+    src/local_account_store.cpp
+    src/session_revocation_store.cpp
+    src/service_runtime.cpp
+    src/execution_budget.cpp
 )
 
 target_include_directories(ichess_backend PUBLIC
@@ -32,12 +86,24 @@ target_link_libraries(ichess_backend
     PUBLIC
         cgh
         ctu
+        cei
         httplib::httplib
         nlohmann_json::nlohmann_json
+        ichess_sqlite
 )
 
 set_property(TARGET ichess_backend PROPERTY CXX_STANDARD 20)
 set_property(TARGET ichess_backend PROPERTY CXX_STANDARD_REQUIRED ON)
+
+if(WIN32)
+    target_link_libraries(ichess_backend PRIVATE bcrypt advapi32)
+elseif(NOT APPLE)
+    find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+    target_link_libraries(ichess_backend PRIVATE OpenSSL::Crypto)
+endif()
+
+add_executable(ichess_service src/server_main.cpp)
+target_link_libraries(ichess_service PRIVATE ichess_backend)
 
 if(MSVC)
     target_compile_options(ichess_backend PRIVATE /W4)

@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Inheritance Chess API
   version: 1.0.0
-  description: Versioned game service contract. Security and deployment requirements are in docs/SERVICE_CONTRACT.md.
+  description: Versioned game service with local username/password authentication. Social identity providers may be added later. Security and deployment requirements are in docs/SERVICE_CONTRACT.md.
 servers:
   - url: https://chess.example.com
     description: Replace with the deployed same-origin hostname.
@@ -58,6 +58,196 @@ paths:
                 $ref: '#/components/schemas/SessionInfo'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /api/v1/auth/register:
+    post:
+      operationId: registerLocalAccount
+      summary: Create a local account and start a session
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocalCredentials'
+      responses:
+        '201':
+          description: Account created and session established.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Account storage or session capacity is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/auth/login:
+    post:
+      operationId: loginLocalAccount
+      summary: Authenticate a local account and start a session
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocalCredentials'
+      responses:
+        '200':
+          description: Session established.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Account storage or session capacity is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/auth/logout:
+    post:
+      operationId: logoutLocalSession
+      summary: Revoke the current session
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: Session revoked and cookie expired.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/auth/password:
+    post:
+      operationId: changeLocalPassword
+      summary: Change the authenticated account password
+      description: Requires the current password and the session CSRF token. Existing account sessions are revoked and a fresh session is issued.
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChange'
+      responses:
+        '200':
+          description: Password changed; previous sessions revoked and a new session issued.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: Password or session storage is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/auth/delete:
+    post:
+      operationId: deleteLocalAccount
+      summary: Delete the authenticated account
+      description: Requires the current password and session CSRF token. Sessions are revoked, retained games are anonymized, and account idempotency records are removed.
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [currentPassword]
+              properties:
+                currentPassword:
+                  type: string
+                  minLength: 12
+                  maxLength: 1024
+                  format: password
+      responses:
+        '200':
+          description: Account deleted and retained games anonymized.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [deleted]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: A required database is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /api/v1/games:
     post:
       operationId: createGame
@@ -72,6 +262,7 @@ paths:
             minLength: 16
             maxLength: 128
         - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/Origin'
       requestBody:
         required: false
         content:
@@ -133,6 +324,7 @@ paths:
         - $ref: '#/components/parameters/IfMatch'
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/Origin'
       responses:
         '200':
           description: The caller joined or already occupies Black.
@@ -228,6 +420,7 @@ paths:
         - $ref: '#/components/parameters/IfMatch'
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/Origin'
       requestBody:
         required: true
         content:
@@ -273,6 +466,7 @@ paths:
         - $ref: '#/components/parameters/IfMatch'
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/Origin'
       responses:
         '200':
           description: Game resigned; response is the new snapshot.
@@ -306,6 +500,7 @@ paths:
         - $ref: '#/components/parameters/IfMatch'
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/Origin'
       responses:
         '200':
           description: Draw offer recorded; response is the new snapshot.
@@ -339,6 +534,7 @@ paths:
         - $ref: '#/components/parameters/IfMatch'
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/Origin'
       responses:
         '200':
           description: Draw accepted; response is the new snapshot.
@@ -405,6 +601,14 @@ components:
         type: string
         minLength: 32
         maxLength: 256
+    Origin:
+      name: Origin
+      in: header
+      required: true
+      description: Must exactly match the configured public HTTPS origin. Browsers supply this header automatically for POST requests.
+      schema:
+        type: string
+        format: uri
   headers:
     ETag:
       description: Strong validator for the returned game version.
@@ -454,7 +658,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Unprocessable:
-      description: Request is well-formed but the FEN or move is invalid for this game.
+      description: Request is well-formed but a field or operation is unsupported/invalid, including FEN, move, or time control.
       content:
         application/problem+json:
           schema:
@@ -493,6 +697,48 @@ components:
           type: string
           minLength: 32
           maxLength: 256
+    LocalCredentials:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: '^[A-Za-z0-9._-]+$'
+        password:
+          type: string
+          minLength: 12
+          maxLength: 1024
+          format: password
+    AuthenticatedSession:
+      type: object
+      additionalProperties: false
+      required: [csrfToken, expires]
+      properties:
+        csrfToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+        expires:
+          type: integer
+          format: int64
+    PasswordChange:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          minLength: 12
+          maxLength: 1024
+          format: password
+        newPassword:
+          type: string
+          minLength: 12
+          maxLength: 1024
+          format: password
     CreateGameRequest:
       type: object
       additionalProperties: false
@@ -505,18 +751,19 @@ components:
         timeControl:
           $ref: '#/components/schemas/TimeControl'
     TimeControl:
+      description: Simple initial-time-only clock. The clock starts when Black joins. Increment clocks are unsupported.
       type: object
       additionalProperties: false
       required: [initialMs]
       properties:
         initialMs:
           type: integer
-          minimum: 0
+          minimum: 1
           maximum: 86400000
         incrementMs:
           type: integer
           minimum: 0
-          maximum: 3600000
+          maximum: 0
           default: 0
     SubmitMoveRequest:
       type: object
